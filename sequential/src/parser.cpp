@@ -2,7 +2,6 @@
 #include <algorithm>
 #include <sstream>
 
-
 using namespace std;
 Parser::Parser(GCNParams *gcnParams, GCNData *gcnData, std::string graph_name) {
   this->graph_file.open("data/" + graph_name + ".graph");
@@ -102,7 +101,8 @@ void Parser::parseNode() {
       char col;
       kv_ss >> k >> col >> v;
 
-      feature_val.push_back(v);
+      feature_val.push_back(1.0);
+      // feature_val.push_back(v);
       feature_sparse_index.indices.push_back(k);
       feature_sparse_index.indptr.back() += 1;
       max_idx = max(max_idx, k);
