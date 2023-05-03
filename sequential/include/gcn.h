@@ -6,7 +6,6 @@
 #include <utility>
 #include <vector>
 
-
 struct GCNParams {
   int num_nodes, input_dim, hidden_dim, output_dim;
   float dropout, learning_rate, weight_decay;
@@ -17,8 +16,6 @@ struct GCNParams {
 class GCNData {
 public:
   SparseIndex feature_index, graph;
-  std::vector<float>
-      feature_value; // no need for graph_value (all the elements are 1)
   std::vector<int> split;
   std::vector<int> label;
 };
@@ -26,11 +23,11 @@ public:
 class GCN {
   std::vector<Module *> modules;
   std::vector<Variable> variables;
-  Variable *input, *output;
+  // Variable *input, *output;
+  Variable *output;
   std::vector<int> truth;
   Adam optimizer;
   float loss;
-  void set_input();
   void set_truth(int current_split);
   float get_accuracy();
   float get_l2_penalty();

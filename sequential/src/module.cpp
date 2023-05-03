@@ -45,9 +45,9 @@ void Matmul::backward() {
 /**
  * A sparse matrix multiplication layer.
  */
-SparseMatmul::SparseMatmul(Variable *a, Variable *b, Variable *c,
-                           SparseIndex *sp, int m, int n, int p)
-    : a(a), b(b), c(c), sp(sp), m(m), n(n), p(p) {}
+SparseMatmul::SparseMatmul(Variable *b, Variable *c, SparseIndex *sp, int m,
+                           int n, int p)
+    : b(b), c(c), sp(sp), m(m), n(n), p(p) {}
 
 void SparseMatmul::forward(bool training) {
   timer_start(TMR_SPMATMUL_FW);
@@ -59,7 +59,7 @@ void SparseMatmul::forward(bool training) {
          jj++) {                  // iterate over columns of X
       int j = sp->indices[jj];    // get the column index of the i-th row of X
       for (int k = 0; k < p; k++) // iterate over columns of c (W_0)
-        c->data[i * p + k] += a->data[jj] * b->data[j * p + k];
+        c->data[i * p + k] += b->data[j * p + k];
     }
   timer_stop(TMR_SPMATMUL_FW);
 }
@@ -72,7 +72,7 @@ void SparseMatmul::backward() {
     for (int jj = sp->indptr[i]; jj < sp->indptr[i + 1]; jj++) {
       int j = sp->indices[jj];
       for (int k = 0; k < p; k++)
-        b->grad[j * p + k] += c->grad[i * p + k] * a->data[jj];
+        b->grad[j * p + k] += c->grad[i * p + k];
     }
   timer_stop(TMR_SPMATMUL_BW);
 }

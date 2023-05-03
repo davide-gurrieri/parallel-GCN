@@ -63,8 +63,7 @@ void Parser::parseNode() {
   auto &feature_sparse_index =
       this->gcnData
           ->feature_index; // Reference to "feature_index" member (SparseIndex)
-  auto &feature_val = this->gcnData->feature_value; // std::vector<float>
-  auto &labels = this->gcnData->label;              // std::vector<int>
+  auto &labels = this->gcnData->label; // std::vector<int>
 
   feature_sparse_index.indptr.push_back(0);
 
@@ -101,8 +100,6 @@ void Parser::parseNode() {
       char col;
       kv_ss >> k >> col >> v;
 
-      feature_val.push_back(1.0);
-      // feature_val.push_back(v);
       feature_sparse_index.indices.push_back(k);
       feature_sparse_index.indptr.back() += 1;
       max_idx = max(max_idx, k);

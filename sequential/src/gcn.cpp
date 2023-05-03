@@ -52,14 +52,11 @@ GCN::GCN(GCNParams params, GCNData *input_data) {
   init_rand_state();
   this->params = params;
   data = input_data;
-  modules.reserve(8); // allocate the space for the 8 modules/layers
+  modules.reserve(7); // allocate the space for the 8 modules/layers
   variables.reserve(8);
-  variables.emplace_back(data->feature_index.indices.size(), false);
-  input = &variables.back();
 
-  // dropout
-  modules.push_back(new Dropout(input, params.dropout));
   variables.emplace_back(params.num_nodes * params.hidden_dim);
+  // input = &variables.back();
   Variable *layer1_var1 = &variables.back();
   variables.emplace_back(params.input_dim * params.hidden_dim, true, true);
   Variable *layer1_weight = &variables.back();
@@ -67,7 +64,7 @@ GCN::GCN(GCNParams params, GCNData *input_data) {
                         params.hidden_dim); // weights initilization
 
   // sparsematmul
-  modules.push_back(new SparseMatmul(input, layer1_weight, layer1_var1,
+  modules.push_back(new SparseMatmul(layer1_weight, layer1_var1,
                                      &data->feature_index, params.num_nodes,
                                      params.input_dim, params.hidden_dim));
   variables.emplace_back(params.num_nodes * params.hidden_dim);
@@ -119,12 +116,6 @@ GCN::~GCN() {
     delete m;
 }
 
-// set the current input for the GCN model
-void GCN::set_input() {
-  for (int i = 0; i < input->data.size(); i++)
-    input->data[i] = data->feature_value[i];
-}
-
 // set the label of each node inside of the current_split
 // (validation/train/test)
 void GCN::set_truth(int current_split) {
@@ -168,7 +159,6 @@ float GCN::get_l2_penalty() {
  * Train an epoch of the model
  */
 std::pair<float, float> GCN::train_epoch() {
-  set_input(); // set the input data
 
   set_truth(1); // get the true labels for the dataset with split == 1 (train)
 
@@ -192,7 +182,6 @@ std::pair<float, float> GCN::train_epoch() {
  * current_split == 3 --> test
  */
 std::pair<float, float> GCN::eval(int current_split) {
-  set_input();
   set_truth(current_split);
   for (auto m : modules)
     m->forward(false);
