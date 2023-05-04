@@ -23,7 +23,6 @@ public:
 class GCN {
   std::vector<Module *> modules;
   std::vector<Variable> variables;
-  // Variable *input, *output;
   Variable *output;
   std::vector<int> truth;
   Adam optimizer;
