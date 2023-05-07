@@ -1,15 +1,15 @@
 //#include "../include/module.h"
 //#include "../include/optim.h"
+#include "../include/gcn.cuh"
 #include "../include/parser.h"
-
-using namespace std;
 
 int main(int argc, char **argv) {
   setbuf(stdout, NULL);
   if (argc < 2) {
-    cout << "parallel_gcn graph_name [num_nodes input_dim hidden_dim output_dim"
-            "dropout learning_rate, weight_decay epochs early_stopping]"
-         << endl;
+    std::cout
+        << "parallel_gcn graph_name [num_nodes input_dim hidden_dim output_dim"
+           "dropout learning_rate, weight_decay epochs early_stopping]"
+        << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -23,6 +23,8 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   } else
     std::cout << "Parsing goes well." << std::endl;
+
+  // GCN cu_gcn(&params, &data);
 
   return EXIT_SUCCESS;
 }
