@@ -3,13 +3,10 @@
 
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
-#include <memory>
+
 #include "../include/variable.cuh"
 #include "../include/module.cuh"
 #include "../include/sparse.cuh"
-
-using std::shared_ptr;
-using std::unique_ptr;
 
 /*
 #include "module.h"
@@ -56,9 +53,9 @@ public:
 class GCN
 {
   GCNData *data;
-  std::vector<Module *> modules;
-  std::vector<Variable *> variables;
-  Variable *input, *output;
+  std::vector<unique_ptr<Module>> modules;
+  std::vector<shared_ptr<Variable>> variables;
+  shared_ptr<Variable> input, output;
   // Adam *optimizer;
   // integer *truth;
   real loss;

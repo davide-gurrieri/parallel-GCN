@@ -86,49 +86,49 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
     variables.reserve(7);
 
     // dropout
-    variables.push_back(new Variable(data_->feature_index.indices.size(), false));
+    variables.push_back(std::make_shared<Variable>(data_->feature_index.indices.size(), false));
     input = variables.back();
-    modules.push_back(new Dropout(input, params->dropout, dev_rand_states));
+    modules.push_back(std::make_unique<Dropout>(input, params->dropout, dev_rand_states));
 
     // sparse matmul
-    variables.push_back(new Variable(params->num_nodes * params->hidden_dim));
-    Variable *layer1_var1 = variables.back();
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dim));
+    shared_ptr<Variable> layer1_var1 = variables.back();
 
-    variables.push_back(new Variable(params->input_dim * params->hidden_dim, true, dev_rand_states));
-    Variable *layer1_weight = variables.back();
+    variables.push_back(std::make_shared<Variable>(params->input_dim * params->hidden_dim, true, dev_rand_states));
+    shared_ptr<Variable> layer1_weight = variables.back();
     layer1_weight->glorot(params->input_dim, params->hidden_dim);
 
-    modules.push_back(new SparseMatmul(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dim));
+    modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dim));
 
     // graph sum
-    variables.push_back(new Variable(params->num_nodes * params->hidden_dim));
-    Variable *layer1_var2 = variables.back();
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dim));
+    shared_ptr<Variable> layer1_var2 = variables.back();
 
-    modules.push_back(new GraphSum(layer1_var1, layer1_var2, &dev_data.dev_graph, params->hidden_dim));
+    modules.push_back(std::make_unique<GraphSum>(layer1_var1, layer1_var2, &dev_data.dev_graph, params->hidden_dim));
 
     // ReLU
-    modules.push_back(new ReLU(layer1_var2));
+    modules.push_back(std::make_unique<ReLU>(layer1_var2));
 
     // dropout
-    modules.push_back(new Dropout(layer1_var2, params->dropout, dev_rand_states));
+    modules.push_back(std::make_unique<Dropout>(layer1_var2, params->dropout, dev_rand_states));
 
     // dense matmul
-    variables.push_back(new Variable(params->num_nodes * params->output_dim));
-    Variable *layer2_var1 = variables.back();
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
+    shared_ptr<Variable> layer2_var1 = variables.back();
 
-    variables.push_back(new Variable(params->hidden_dim * params->output_dim, true, dev_rand_states));
-    Variable *layer2_weight = variables.back();
+    variables.push_back(std::make_shared<Variable>(params->hidden_dim * params->output_dim, true, dev_rand_states));
+    shared_ptr<Variable> layer2_weight = variables.back();
     layer2_weight->glorot(params->hidden_dim, params->output_dim);
 
-    modules.push_back(new Matmul(layer1_var2, layer2_weight, layer2_var1, params->num_nodes, params->hidden_dim, params->output_dim));
+    modules.push_back(std::make_unique<Matmul>(layer1_var2, layer2_weight, layer2_var1, params->num_nodes, params->hidden_dim, params->output_dim));
 
     // graph sum
-    variables.push_back(new Variable(params->num_nodes * params->output_dim));
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
     output = variables.back();
-    modules.push_back(new GraphSum(layer2_var1, output, &dev_data.dev_graph, params->output_dim));
+    modules.push_back(std::make_unique<GraphSum>(layer2_var1, output, &dev_data.dev_graph, params->output_dim));
 
     // cross entropy loss
-    modules.push_back(new CrossEntropyLoss(output, dev_data.dev_label, &loss, params->output_dim));
+    modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_data.dev_label, &loss, params->output_dim));
 
     /*
 
@@ -136,7 +136,7 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
          AdamParams adam_params = AdamParams::get_default();
          adam_params->lr = params->learning_rate;
          adam_params->weight_decay = params->weight_decay;
-         optimizer = new Adam({{layer1_weight, true}, {layer2_weight, false}}, adam_params);
+         optimizer = std::make_unique<Adam>({{layer1_weight, true}, {layer2_weight, false}}, adam_params);
          */
 }
 
@@ -146,10 +146,6 @@ GCN::~GCN()
     std::cout << count << std::endl;
 
     CHECK_CUDA_ERROR(cudaFree(dev_rand_states));
-    for (auto &m : modules)
-        delete m;
-    for (auto &v : variables)
-        delete v;
 }
 
 __global__ void initialize_random_kernel(curandState *dev_rand_states)

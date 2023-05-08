@@ -1,6 +1,10 @@
 #ifndef MODULE_CUH
 #define MODULE_CUH
 
+#include <memory>
+using std::shared_ptr;
+using std::unique_ptr;
+
 #include "../include/utils.cuh"
 #include "../include/variable.cuh"
 #include "../include/timer.h"
@@ -18,13 +22,13 @@ public:
 
 class Dropout : public Module
 {
-    Variable *in;
+    shared_ptr<Variable> in;
     bool *dev_mask;
     real p;
     curandState *dev_rand_states;
 
 public:
-    Dropout(Variable *in_, real p_, curandState *dev_rand_states_);
+    Dropout(shared_ptr<Variable> in_, real p_, curandState *dev_rand_states_);
     ~Dropout();
     void forward(bool);
     void backward();
@@ -34,14 +38,14 @@ public:
 
 class SparseMatmul : public Module
 {
-    Variable *a, *b, *c;
+    shared_ptr<Variable> a, b, c;
     DevSparseIndex *sp;
     natural m, n, p;
 
 public:
-    SparseMatmul(Variable *a_,
-                 Variable *b_,
-                 Variable *c_,
+    SparseMatmul(shared_ptr<Variable> a_,
+                 shared_ptr<Variable> b_,
+                 shared_ptr<Variable> c_,
                  DevSparseIndex *sp_,
                  natural m_,
                  natural n_,
@@ -55,12 +59,12 @@ public:
 
 class GraphSum : public Module
 {
-    Variable *in, *out;
+    shared_ptr<Variable> in, out;
     DevSparseIndex *graph;
     natural dim;
 
 public:
-    GraphSum(Variable *in_, Variable *out_, DevSparseIndex *graph_, natural dim_);
+    GraphSum(shared_ptr<Variable> in_, shared_ptr<Variable> out_, DevSparseIndex *graph_, natural dim_);
     ~GraphSum() {}
     void forward(bool){};
     void backward(){};
@@ -70,11 +74,11 @@ public:
 
 class ReLU : public Module
 {
-    Variable *in;
+    shared_ptr<Variable> in;
     bool *mask;
 
 public:
-    ReLU(Variable *in);
+    ReLU(shared_ptr<Variable> in);
     ~ReLU();
     void forward(bool){};
     void backward(){};
@@ -84,13 +88,13 @@ public:
 
 class Matmul : public Module
 {
-    Variable *a, *b, *c;
+    shared_ptr<Variable> a, b, c;
     natural m, n, p;
 
 public:
-    Matmul(Variable *a_,
-           Variable *b_,
-           Variable *c_,
+    Matmul(shared_ptr<Variable> a_,
+           shared_ptr<Variable> b_,
+           shared_ptr<Variable> c_,
            natural m_,
            natural n_,
            natural p_);
@@ -103,13 +107,13 @@ public:
 
 class CrossEntropyLoss : public Module
 {
-    Variable *logits;
+    shared_ptr<Variable> logits;
     natural *truth;
     real *loss;
     natural num_classes;
 
 public:
-    CrossEntropyLoss(Variable *logits_, natural *truth_, real *loss_, natural num_classes_);
+    CrossEntropyLoss(shared_ptr<Variable> logits_, natural *truth_, real *loss_, natural num_classes_);
     ~CrossEntropyLoss(){};
     void forward(bool){};
     void backward(){};

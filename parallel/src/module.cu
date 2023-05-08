@@ -4,7 +4,7 @@
 // CONSTRUCTORS & DESTRUCTORS
 // ###################################################################################
 
-Dropout::Dropout(Variable *in_, real p_, curandState *dev_rand_states_) : in(in_), p(p_), dev_rand_states(dev_rand_states_)
+Dropout::Dropout(shared_ptr<Variable> in_, real p_, curandState *dev_rand_states_) : in(in_), p(p_), dev_rand_states(dev_rand_states_)
 {
     if (in->dev_grad)
         CHECK_CUDA_ERROR(cudaMalloc(&dev_mask, in->size * sizeof(bool)));
@@ -50,15 +50,15 @@ void Dropout::backward() {}
 
 // -----------------------------------------------------------------------------------
 
-SparseMatmul::SparseMatmul(Variable *a_, Variable *b_, Variable *c_, DevSparseIndex *sp_, natural m_, natural n_, natural p_) : a(a_), b(b_), c(c_), sp(sp_), m(m_), n(n_), p(p_) {}
+SparseMatmul::SparseMatmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Variable> c_, DevSparseIndex *sp_, natural m_, natural n_, natural p_) : a(a_), b(b_), c(c_), sp(sp_), m(m_), n(n_), p(p_) {}
 
 // -----------------------------------------------------------------------------------
 
-GraphSum::GraphSum(Variable *in_, Variable *out_, DevSparseIndex *graph_, natural dim_) : in(in_), out(out_), graph(graph_), dim(dim_) {}
+GraphSum::GraphSum(shared_ptr<Variable> in_, shared_ptr<Variable> out_, DevSparseIndex *graph_, natural dim_) : in(in_), out(out_), graph(graph_), dim(dim_) {}
 
 // -----------------------------------------------------------------------------------
 
-ReLU::ReLU(Variable *in) : in(in)
+ReLU::ReLU(shared_ptr<Variable> in) : in(in)
 {
     CHECK_CUDA_ERROR(cudaMalloc(&mask, in->size * sizeof(bool)));
 }
@@ -70,11 +70,11 @@ ReLU::~ReLU()
 
 // -----------------------------------------------------------------------------------
 
-Matmul::Matmul(Variable *a_, Variable *b_, Variable *c_, natural m_, natural n_, natural p_) : a(a_), b(b_), c(c_), m(m_), n(n_), p(p_) {}
+Matmul::Matmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Variable> c_, natural m_, natural n_, natural p_) : a(a_), b(b_), c(c_), m(m_), n(n_), p(p_) {}
 
 // -----------------------------------------------------------------------------------
 
-CrossEntropyLoss::CrossEntropyLoss(Variable *logits_, natural *truth_, real *loss_, natural num_classes_) : logits(logits_), truth(truth_), loss(loss_), num_classes(num_classes_) {}
+CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, natural *truth_, real *loss_, natural num_classes_) : logits(logits_), truth(truth_), loss(loss_), num_classes(num_classes_) {}
 
 // ###################################################################################
 // FORWARD
