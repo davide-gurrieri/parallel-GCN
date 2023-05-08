@@ -3,13 +3,13 @@
 
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
-// #include <memory>
+#include <memory>
 #include "../include/variable.cuh"
 #include "../include/module.cuh"
 #include "../include/sparse.cuh"
 
-// using std::shared_ptr;
-// using std::unique_ptr;
+using std::shared_ptr;
+using std::unique_ptr;
 
 /*
 #include "module.h"

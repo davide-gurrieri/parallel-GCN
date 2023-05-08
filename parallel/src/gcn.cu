@@ -75,7 +75,6 @@ DevGCNData::~DevGCNData()
 
 GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev_data{DevGCNData(*data_)}
 {
-    count++;
     initialize_random();
 
     /*
@@ -97,7 +96,7 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
 
     variables.push_back(new Variable(params->input_dim * params->hidden_dim, true, dev_rand_states));
     Variable *layer1_weight = variables.back();
-    layer1_var1->glorot(params->input_dim, params->hidden_dim);
+    layer1_weight->glorot(params->input_dim, params->hidden_dim);
 
     modules.push_back(new SparseMatmul(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dim));
 
@@ -143,8 +142,14 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
 
 GCN::~GCN()
 {
+    count++;
     std::cout << count << std::endl;
+
     CHECK_CUDA_ERROR(cudaFree(dev_rand_states));
+    for (auto &m : modules)
+        delete m;
+    for (auto &v : variables)
+        delete v;
 }
 
 __global__ void initialize_random_kernel(curandState *dev_rand_states)
