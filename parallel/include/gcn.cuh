@@ -7,6 +7,7 @@
 #include "../include/variable.cuh"
 #include "../include/module.cuh"
 #include "../include/sparse.cuh"
+#include "../include/optim.cuh"
 
 // ##################################################################################
 
@@ -52,7 +53,7 @@ class GCN
   std::vector<unique_ptr<Module>> modules;
   std::vector<shared_ptr<Variable>> variables;
   shared_ptr<Variable> input, output;
-  // Adam *optimizer;
+  unique_ptr<Adam> optimizer;
   integer *dev_truth;
   real loss;
 

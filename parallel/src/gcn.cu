@@ -135,14 +135,13 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
     // cross entropy loss
     modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_data.dev_label, &loss, params->output_dim));
 
-    /*
+    // optimizer
+    AdamParams adam_params = AdamParams::get_default();
+    adam_params.lr = params->learning_rate;
+    adam_params.weight_decay = params->weight_decay;
 
-         // optimizer
-         AdamParams adam_params = AdamParams::get_default();
-         adam_params->lr = params->learning_rate;
-         adam_params->weight_decay = params->weight_decay;
-         optimizer = std::make_unique<Adam>({{layer1_weight, true}, {layer2_weight, false}}, adam_params);
-         */
+    std::vector<std::pair<shared_ptr<Variable>, bool>> vars = {{layer1_weight, true}, {layer2_weight, false}};
+    optimizer = std::make_unique<Adam>(vars, adam_params);
 }
 
 // ##################################################################################

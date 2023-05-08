@@ -1,7 +1,6 @@
 #ifndef SPARSE_CUH
 #define SPARSE_CUH
 
-#include <iostream>
 #include <vector>
 
 #include "../include/utils.cuh"
