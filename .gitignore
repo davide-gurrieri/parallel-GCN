@@ -1,2 +1,5 @@
 sequential/exec/
+sequential/data/reddit.graph
+sequential/data/reddit.split
+sequential/data/reddit.svmlight
 parallel/exec/
