@@ -20,11 +20,7 @@ public:
     // Constructor that allocates device memory using cudaMalloc
     explicit dev_shared_ptr(size_t count)
     {
-        cudaError_t err = cudaMalloc(&ptr, count * sizeof(T));
-        if (err != cudaSuccess)
-        {
-            throw std::runtime_error("cudaMalloc failed");
-        }
+        CHECK_CUDA_ERROR(cudaMalloc(&ptr, count * sizeof(T)));
         refCount = new int(1);
     }
 
@@ -108,7 +104,7 @@ private:
             (*refCount)--;
             if (*refCount == 0)
             {
-                cudaFree(ptr);
+                CHECK_CUDA_ERROR(cudaFree(ptr));
                 delete refCount;
             }
         }
