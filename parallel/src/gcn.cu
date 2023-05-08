@@ -48,7 +48,7 @@ GCNParams GCNParams::get_default()
         0};     // early_stopping*/
 }
 
-// DevGCNData::DevGCNData() : dev_graph(DevSparseIndex()), dev_feature_index(DevSparseIndex()), dev_feature_value(nullptr), dev_split(nullptr), dev_label(nullptr), label_size(0) {}
+// ##################################################################################
 
 DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph(DevSparseIndex(gcn_data.graph)), dev_feature_index(DevSparseIndex(gcn_data.feature_index))
 {
@@ -63,6 +63,8 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph(DevSparseIndex(gcn_d
     CHECK_CUDA_ERROR(cudaMemcpy(dev_label, gcn_data.label.data(), label_size * sizeof(natural), cudaMemcpyHostToDevice));
 }
 
+// ##################################################################################
+
 DevGCNData::~DevGCNData()
 {
     if (dev_feature_value)
@@ -73,9 +75,12 @@ DevGCNData::~DevGCNData()
         CHECK_CUDA_ERROR(cudaFree(dev_label));
 }
 
+// ##################################################################################
+
 GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev_data{DevGCNData(*data_)}
 {
     initialize_random();
+    initialize_truth();
 
     /*
         CHECK_CUDA_ERROR(cudaMalloc(&params_dev, sizeof(GCNParams)));
@@ -140,13 +145,15 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
          */
 }
 
+// ##################################################################################
+
 GCN::~GCN()
 {
-    count++;
-    std::cout << count << std::endl;
-
     CHECK_CUDA_ERROR(cudaFree(dev_rand_states));
+    CHECK_CUDA_ERROR(cudaFree(dev_truth));
 }
+
+// ##################################################################################
 
 __global__ void initialize_random_kernel(curandState *dev_rand_states)
 {
@@ -154,7 +161,6 @@ __global__ void initialize_random_kernel(curandState *dev_rand_states)
     curand_init(SEED + threadIdx.x, threadIdx.x, 0, &dev_rand_states[threadIdx.x]);
 }
 
-/// @brief initializes an array of curandState structures in device memory
 void GCN::initialize_random()
 {
     CHECK_CUDA_ERROR(cudaMalloc(&dev_rand_states, N_THREADS * sizeof(curandState)));
@@ -162,3 +168,46 @@ void GCN::initialize_random()
     CHECK_CUDA_ERROR(cudaGetLastError());
     // CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 }
+
+// ##################################################################################
+
+void GCN::initialize_truth()
+{
+    CHECK_CUDA_ERROR(cudaMalloc(&dev_truth, params->num_nodes * sizeof(integer)));
+}
+
+// ##################################################################################
+
+__global__ void set_input_kernel(real *dev_data, real *dev_feature_value, natural size)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size)
+        dev_data[i] = dev_feature_value[i];
+}
+
+void GCN::set_input()
+{
+    dim3 n_blocks(CEIL(input->size, N_THREADS));
+    dim3 n_threads(N_THREADS);
+    set_input_kernel<<<n_blocks, n_threads>>>(input->dev_data, dev_data.dev_feature_value, input->size);
+    CHECK_CUDA_ERROR(cudaGetLastError());
+}
+
+// ##################################################################################
+
+__global__ void set_truth_kernel(integer *dev_truth, natural *dev_split, integer *dev_label, natural size, natural current_split)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size)
+        dev_truth[i] = dev_split[i] == current_split ? dev_label[i] : -1;
+}
+
+void GCN::set_truth(int current_split)
+{
+    dim3 n_blocks(CEIL(params->num_nodes, N_THREADS));
+    dim3 n_threads(N_THREADS);
+    set_truth_kernel<<<n_blocks, n_threads>>>(dev_truth, dev_data.dev_split, dev_data.dev_label, params->num_nodes, current_split);
+    CHECK_CUDA_ERROR(cudaGetLastError());
+}
+
+// ##################################################################################

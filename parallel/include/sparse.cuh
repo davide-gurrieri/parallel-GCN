@@ -6,6 +6,7 @@
 
 #include "../include/utils.cuh"
 
+// ##################################################################################
 /*
  * Class to store parsed sparse matrices from the host.
  */
@@ -16,6 +17,8 @@ public:
     std::vector<natural> indptr;
     void print();
 };
+
+// ##################################################################################
 
 class DevSparseIndex
 {
@@ -28,5 +31,7 @@ public:
     DevSparseIndex(const SparseIndex &sparse_index);
     ~DevSparseIndex();
 };
+
+// ##################################################################################
 
 #endif

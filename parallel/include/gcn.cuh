@@ -8,16 +8,7 @@
 #include "../include/module.cuh"
 #include "../include/sparse.cuh"
 
-/*
-#include "module.h"
-#include "optim.h"
-#include "variable.h"
-#include <utility>
-*/
-
-// #include <cstdio>
-// #include <tuple>
-// #include <vector>
+// ##################################################################################
 
 struct GCNParams
 {
@@ -27,13 +18,17 @@ struct GCNParams
   static GCNParams get_default();
 };
 
+// ##################################################################################
+
 struct GCNData
 {
   SparseIndex feature_index, graph;
   std::vector<natural> split;
-  std::vector<natural> label;
+  std::vector<integer> label;
   std::vector<real> feature_value;
 };
+
+// ##################################################################################
 
 class DevGCNData
 {
@@ -42,13 +37,14 @@ public:
   DevSparseIndex dev_feature_index; // feature
   real *dev_feature_value;
   natural *dev_split;
-  natural *dev_label;
+  integer *dev_label;
   natural label_size;
   // DevGCNData();
   DevGCNData(const GCNData &gcn_data);
-
   ~DevGCNData();
 };
+
+// ##################################################################################
 
 class GCN
 {
@@ -57,25 +53,28 @@ class GCN
   std::vector<shared_ptr<Variable>> variables;
   shared_ptr<Variable> input, output;
   // Adam *optimizer;
-  // integer *truth;
+  integer *dev_truth;
   real loss;
+
+  void set_input();
+  void set_truth(int current_split);
   /*
-    void set_input();
-    void set_truth(int current_split);
     float get_accuracy();
     float get_l2_penalty();
     pair<float, float> train_epoch();
     pair<float, float> eval(int current_split);
   */
 public:
-  inline static natural count = 0;
   DevGCNData dev_data;
   curandState *dev_rand_states;
   GCNParams *params;
   GCN(GCNParams *params_, GCNData *data_);
   void initialize_random();
+  void initialize_truth();
   ~GCN();
   // void run();
 };
+
+// ##################################################################################
 
 #endif

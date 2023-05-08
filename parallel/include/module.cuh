@@ -10,6 +10,8 @@ using std::unique_ptr;
 #include "../include/timer.h"
 #include "../include/sparse.cuh"
 
+// ##################################################################################
+
 class Module
 {
 public:
@@ -18,7 +20,7 @@ public:
     virtual ~Module(){};
 };
 
-// ########################################################
+// ##################################################################################
 
 class Dropout : public Module
 {
@@ -34,7 +36,7 @@ public:
     void backward();
 };
 
-// ########################################################
+// ##################################################################################
 
 class SparseMatmul : public Module
 {
@@ -55,7 +57,7 @@ public:
     void backward(){};
 };
 
-// ########################################################
+// ##################################################################################
 
 class GraphSum : public Module
 {
@@ -70,7 +72,7 @@ public:
     void backward(){};
 };
 
-// ########################################################
+// ##################################################################################
 
 class ReLU : public Module
 {
@@ -84,7 +86,7 @@ public:
     void backward(){};
 };
 
-// ########################################################
+// ##################################################################################
 
 class Matmul : public Module
 {
@@ -103,22 +105,22 @@ public:
     void backward(){};
 };
 
-// ########################################################
+// ##################################################################################
 
 class CrossEntropyLoss : public Module
 {
     shared_ptr<Variable> logits;
-    natural *truth;
+    integer *dev_truth;
     real *loss;
     natural num_classes;
 
 public:
-    CrossEntropyLoss(shared_ptr<Variable> logits_, natural *truth_, real *loss_, natural num_classes_);
+    CrossEntropyLoss(shared_ptr<Variable> logits_, integer *dev_truth_, real *loss_, natural num_classes_);
     ~CrossEntropyLoss(){};
     void forward(bool){};
     void backward(){};
 };
 
-// ########################################################
+// ##################################################################################
 
 #endif

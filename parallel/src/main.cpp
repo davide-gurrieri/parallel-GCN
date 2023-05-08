@@ -25,7 +25,6 @@ int main(int argc, char **argv) {
     std::cout << "Parsing goes well." << std::endl;
 
   GCN cu_gcn(&params, &data);
-  std::cout << "OK" << std::endl;
 
   return EXIT_SUCCESS;
 }

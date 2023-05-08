@@ -1,8 +1,7 @@
 #include "../include/module.cuh"
 
-// ###################################################################################
-// CONSTRUCTORS & DESTRUCTORS
-// ###################################################################################
+// DROPOUT
+// ##################################################################################
 
 Dropout::Dropout(shared_ptr<Variable> in_, real p_, curandState *dev_rand_states_) : in(in_), p(p_), dev_rand_states(dev_rand_states_)
 {
@@ -12,11 +11,15 @@ Dropout::Dropout(shared_ptr<Variable> in_, real p_, curandState *dev_rand_states
         dev_mask = nullptr;
 }
 
+// ##################################################################################
+
 Dropout::~Dropout()
 {
     if (dev_mask)
         CHECK_CUDA_ERROR(cudaFree(dev_mask));
 }
+
+// ##################################################################################
 
 __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, curandState *dev_rand_states,
                                        const natural size, const real p, const real scale)
@@ -46,17 +49,22 @@ void Dropout::forward(bool training)
     timer_stop(TMR_DROPOUT_FW);
 }
 
+// ##################################################################################
+
 void Dropout::backward() {}
 
-// -----------------------------------------------------------------------------------
+// SPARSEMATMUL
+// ##################################################################################
 
 SparseMatmul::SparseMatmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Variable> c_, DevSparseIndex *sp_, natural m_, natural n_, natural p_) : a(a_), b(b_), c(c_), sp(sp_), m(m_), n(n_), p(p_) {}
 
-// -----------------------------------------------------------------------------------
+// GRAPHSUM
+// ##################################################################################
 
 GraphSum::GraphSum(shared_ptr<Variable> in_, shared_ptr<Variable> out_, DevSparseIndex *graph_, natural dim_) : in(in_), out(out_), graph(graph_), dim(dim_) {}
 
-// -----------------------------------------------------------------------------------
+// RELU
+// ##################################################################################
 
 ReLU::ReLU(shared_ptr<Variable> in) : in(in)
 {
@@ -68,18 +76,12 @@ ReLU::~ReLU()
     CHECK_CUDA_ERROR(cudaFree(mask));
 }
 
-// -----------------------------------------------------------------------------------
+// MATMUL
+// ##################################################################################
 
 Matmul::Matmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Variable> c_, natural m_, natural n_, natural p_) : a(a_), b(b_), c(c_), m(m_), n(n_), p(p_) {}
 
-// -----------------------------------------------------------------------------------
+// CROSSENTROPYLOSS
+// ##################################################################################
 
-CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, natural *truth_, real *loss_, natural num_classes_) : logits(logits_), truth(truth_), loss(loss_), num_classes(num_classes_) {}
-
-// ###################################################################################
-// FORWARD
-// ###################################################################################
-
-// ###################################################################################
-// BACKWARD
-// ###################################################################################
+CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, integer *dev_truth_, real *loss_, natural num_classes_) : logits(logits_), dev_truth(dev_truth_), loss(loss_), num_classes(num_classes_) {}
