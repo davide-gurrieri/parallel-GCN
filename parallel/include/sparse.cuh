@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "../include/utils.cuh"
+#include "../include/shared_ptr.cuh"
 
 // ##################################################################################
 /*
@@ -22,13 +23,12 @@ public:
 class DevSparseIndex
 {
 public:
-    natural *dev_indices;
-    natural *dev_indptr;
+    dev_shared_ptr<natural> dev_indices;
+    dev_shared_ptr<natural> dev_indptr;
     natural indices_size;
     natural indptr_size;
     // DevSparseIndex();
     DevSparseIndex(const SparseIndex &sparse_index);
-    ~DevSparseIndex();
 };
 
 // ##################################################################################

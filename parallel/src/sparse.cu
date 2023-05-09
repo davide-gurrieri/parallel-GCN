@@ -26,17 +26,9 @@ DevSparseIndex::DevSparseIndex(const SparseIndex &sparse_index)
     indices_size = sparse_index.indices.size();
     indptr_size = sparse_index.indptr.size();
 
-    CHECK_CUDA_ERROR(cudaMalloc(&dev_indices, indices_size * sizeof(natural)));
-    CHECK_CUDA_ERROR(cudaMalloc(&dev_indptr, indptr_size * sizeof(natural)));
+    dev_indices = dev_shared_ptr<natural>(indices_size);
+    dev_indptr = dev_shared_ptr<natural>(indptr_size);
 
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_indices, sparse_index.indices.data(), indices_size * sizeof(natural), cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_indptr, sparse_index.indptr.data(), indptr_size * sizeof(natural), cudaMemcpyHostToDevice));
-}
-
-DevSparseIndex::~DevSparseIndex()
-{
-    if (dev_indices)
-        CHECK_CUDA_ERROR(cudaFree(dev_indices));
-    if (dev_indptr)
-        CHECK_CUDA_ERROR(cudaFree(dev_indptr));
+    dev_indices.copy_to_device(sparse_index.indices.data());
+    dev_indptr.copy_to_device(sparse_index.indptr.data());
 }

@@ -8,6 +8,7 @@
 #include "../include/module.cuh"
 #include "../include/sparse.cuh"
 #include "../include/optim.cuh"
+#include "../include/shared_ptr.cuh"
 
 // ##################################################################################
 
@@ -36,13 +37,12 @@ class DevGCNData
 public:
   DevSparseIndex dev_graph;         // adjacency matrix
   DevSparseIndex dev_feature_index; // feature
-  real *dev_feature_value;
-  natural *dev_split;
-  integer *dev_label;
+  dev_shared_ptr<real> dev_feature_value;
+  dev_shared_ptr<natural> dev_split;
+  dev_shared_ptr<integer> dev_label;
   natural label_size;
   // DevGCNData();
   DevGCNData(const GCNData &gcn_data);
-  ~DevGCNData();
 };
 
 // ##################################################################################
@@ -54,7 +54,7 @@ class GCN
   std::vector<shared_ptr<Variable>> variables;
   shared_ptr<Variable> input, output;
   unique_ptr<Adam> optimizer;
-  integer *dev_truth;
+  dev_shared_ptr<integer> dev_truth;
   real loss;
 
   void set_input();
@@ -67,12 +67,11 @@ class GCN
   */
 public:
   DevGCNData dev_data;
-  curandState *dev_rand_states;
+  dev_shared_ptr<curandState> dev_rand_states;
   GCNParams *params;
   GCN(GCNParams *params_, GCNData *data_);
   void initialize_random();
   void initialize_truth();
-  ~GCN();
   // void run();
 };
 

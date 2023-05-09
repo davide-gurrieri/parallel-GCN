@@ -9,6 +9,7 @@ using std::unique_ptr;
 #include "../include/variable.cuh"
 #include "../include/timer.h"
 #include "../include/sparse.cuh"
+#include "../include/shared_ptr.cuh"
 
 // ##################################################################################
 
@@ -25,13 +26,12 @@ public:
 class Dropout : public Module
 {
     shared_ptr<Variable> in;
-    bool *dev_mask;
+    dev_shared_ptr<bool> dev_mask;
     real p;
-    curandState *dev_rand_states;
+    dev_shared_ptr<curandState> dev_rand_states;
 
 public:
-    Dropout(shared_ptr<Variable> in_, real p_, curandState *dev_rand_states_);
-    ~Dropout();
+    Dropout(shared_ptr<Variable> in_, real p_, dev_shared_ptr<curandState> dev_rand_states_);
     void forward(bool);
     void backward();
 };
@@ -77,11 +77,10 @@ public:
 class ReLU : public Module
 {
     shared_ptr<Variable> in;
-    bool *mask;
+    dev_shared_ptr<bool> dev_mask;
 
 public:
-    ReLU(shared_ptr<Variable> in);
-    ~ReLU();
+    ReLU(shared_ptr<Variable> in_);
     void forward(bool){};
     void backward(){};
 };
@@ -110,12 +109,12 @@ public:
 class CrossEntropyLoss : public Module
 {
     shared_ptr<Variable> logits;
-    integer *dev_truth;
+    dev_shared_ptr<integer> dev_truth;
     real *loss;
     natural num_classes;
 
 public:
-    CrossEntropyLoss(shared_ptr<Variable> logits_, integer *dev_truth_, real *loss_, natural num_classes_);
+    CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, real *loss_, natural num_classes_);
     ~CrossEntropyLoss(){};
     void forward(bool){};
     void backward(){};

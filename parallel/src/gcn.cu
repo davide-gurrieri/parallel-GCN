@@ -54,25 +54,13 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph(DevSparseIndex(gcn_d
 {
     label_size = gcn_data.label.size();
 
-    CHECK_CUDA_ERROR(cudaMalloc(&dev_feature_value, dev_feature_index.indices_size * sizeof(real)));
-    CHECK_CUDA_ERROR(cudaMalloc(&dev_split, label_size * sizeof(natural)));
-    CHECK_CUDA_ERROR(cudaMalloc(&dev_label, label_size * sizeof(natural)));
+    dev_feature_value = dev_shared_ptr<real>(dev_feature_index.indices_size);
+    dev_split = dev_shared_ptr<natural>(label_size);
+    dev_label = dev_shared_ptr<integer>(label_size);
 
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_feature_value, gcn_data.feature_value.data(), dev_feature_index.indices_size * sizeof(real), cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_split, gcn_data.split.data(), label_size * sizeof(natural), cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(dev_label, gcn_data.label.data(), label_size * sizeof(natural), cudaMemcpyHostToDevice));
-}
-
-// ##################################################################################
-
-DevGCNData::~DevGCNData()
-{
-    if (dev_feature_value)
-        CHECK_CUDA_ERROR(cudaFree(dev_feature_value));
-    if (dev_split)
-        CHECK_CUDA_ERROR(cudaFree(dev_split));
-    if (dev_label)
-        CHECK_CUDA_ERROR(cudaFree(dev_label));
+    dev_feature_value.copy_to_device(gcn_data.feature_value.data());
+    dev_split.copy_to_device(gcn_data.split.data());
+    dev_label.copy_to_device(gcn_data.label.data());
 }
 
 // ##################################################################################
@@ -93,6 +81,7 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
     // dropout
     variables.push_back(std::make_shared<Variable>(data_->feature_index.indices.size(), false));
     input = variables.back();
+
     modules.push_back(std::make_unique<Dropout>(input, params->dropout, dev_rand_states));
 
     // sparse matmul
@@ -146,14 +135,6 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
 
 // ##################################################################################
 
-GCN::~GCN()
-{
-    CHECK_CUDA_ERROR(cudaFree(dev_rand_states));
-    CHECK_CUDA_ERROR(cudaFree(dev_truth));
-}
-
-// ##################################################################################
-
 __global__ void initialize_random_kernel(curandState *dev_rand_states)
 {
     // curand_init(seed, index, offset, &state);
@@ -162,8 +143,8 @@ __global__ void initialize_random_kernel(curandState *dev_rand_states)
 
 void GCN::initialize_random()
 {
-    CHECK_CUDA_ERROR(cudaMalloc(&dev_rand_states, N_THREADS * sizeof(curandState)));
-    initialize_random_kernel<<<1, N_THREADS>>>(dev_rand_states);
+    dev_rand_states = dev_shared_ptr<curandState>(N_THREADS);
+    initialize_random_kernel<<<1, N_THREADS>>>(dev_rand_states.get());
     CHECK_CUDA_ERROR(cudaGetLastError());
     // CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 }
@@ -172,7 +153,7 @@ void GCN::initialize_random()
 
 void GCN::initialize_truth()
 {
-    CHECK_CUDA_ERROR(cudaMalloc(&dev_truth, params->num_nodes * sizeof(integer)));
+    dev_truth = dev_shared_ptr<integer>(params->num_nodes);
 }
 
 // ##################################################################################
@@ -188,7 +169,7 @@ void GCN::set_input()
 {
     dim3 n_blocks(CEIL(input->size, N_THREADS));
     dim3 n_threads(N_THREADS);
-    set_input_kernel<<<n_blocks, n_threads>>>(input->dev_data, dev_data.dev_feature_value, input->size);
+    set_input_kernel<<<n_blocks, n_threads>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
     CHECK_CUDA_ERROR(cudaGetLastError());
 }
 
@@ -205,7 +186,7 @@ void GCN::set_truth(int current_split)
 {
     dim3 n_blocks(CEIL(params->num_nodes, N_THREADS));
     dim3 n_threads(N_THREADS);
-    set_truth_kernel<<<n_blocks, n_threads>>>(dev_truth, dev_data.dev_split, dev_data.dev_label, params->num_nodes, current_split);
+    set_truth_kernel<<<n_blocks, n_threads>>>(dev_truth.get(), dev_data.dev_split.get(), dev_data.dev_label.get(), params->num_nodes, current_split);
     CHECK_CUDA_ERROR(cudaGetLastError());
 }
 

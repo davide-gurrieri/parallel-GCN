@@ -3,20 +3,12 @@
 // DROPOUT
 // ##################################################################################
 
-Dropout::Dropout(shared_ptr<Variable> in_, real p_, curandState *dev_rand_states_) : in(in_), p(p_), dev_rand_states(dev_rand_states_)
+Dropout::Dropout(shared_ptr<Variable> in_, real p_, dev_shared_ptr<curandState> dev_rand_states_) : in(in_), p(p_), dev_rand_states(dev_rand_states_)
 {
-    if (in->dev_grad)
-        CHECK_CUDA_ERROR(cudaMalloc(&dev_mask, in->size * sizeof(bool)));
+    if (in->dev_grad.get())
+        dev_mask = dev_shared_ptr<bool>(in->size);
     else
-        dev_mask = nullptr;
-}
-
-// ##################################################################################
-
-Dropout::~Dropout()
-{
-    if (dev_mask)
-        CHECK_CUDA_ERROR(cudaFree(dev_mask));
+        dev_mask = dev_shared_ptr<bool>();
 }
 
 // ##################################################################################
@@ -43,7 +35,7 @@ void Dropout::forward(bool training)
     real scale = 1 / (1 - p);
     dim3 n_blocks(CEIL(in->size, N_THREADS));
     dim3 n_threads(N_THREADS);
-    dropout_kernel_forward<<<n_blocks, n_threads>>>(in->dev_data, dev_mask, dev_rand_states, in->size, p, scale);
+    dropout_kernel_forward<<<n_blocks, n_threads>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
     CHECK_CUDA_ERROR(cudaGetLastError());
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     timer_stop(TMR_DROPOUT_FW);
@@ -66,14 +58,9 @@ GraphSum::GraphSum(shared_ptr<Variable> in_, shared_ptr<Variable> out_, DevSpars
 // RELU
 // ##################################################################################
 
-ReLU::ReLU(shared_ptr<Variable> in) : in(in)
+ReLU::ReLU(shared_ptr<Variable> in_) : in(in_)
 {
-    CHECK_CUDA_ERROR(cudaMalloc(&mask, in->size * sizeof(bool)));
-}
-
-ReLU::~ReLU()
-{
-    CHECK_CUDA_ERROR(cudaFree(mask));
+    dev_mask = dev_shared_ptr<bool>(in->size);
 }
 
 // MATMUL
@@ -84,4 +71,4 @@ Matmul::Matmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Vari
 // CROSSENTROPYLOSS
 // ##################################################################################
 
-CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, integer *dev_truth_, real *loss_, natural num_classes_) : logits(logits_), dev_truth(dev_truth_), loss(loss_), num_classes(num_classes_) {}
+CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, real *loss_, natural num_classes_) : logits(logits_), dev_truth(dev_truth_), loss(loss_), num_classes(num_classes_) {}

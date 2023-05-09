@@ -10,18 +10,12 @@ public:
     // Default constructor
     dev_shared_ptr() : ptr(nullptr), refCount(nullptr) {}
 
-    // Constructor that takes a device pointer
-    explicit dev_shared_ptr(T *p)
-    {
-        ptr = p;
-        refCount = new int(1);
-    }
-
     // Constructor that allocates device memory using cudaMalloc
-    explicit dev_shared_ptr(size_t count)
+    explicit dev_shared_ptr(size_t n_elements_)
     {
-        CHECK_CUDA_ERROR(cudaMalloc(&ptr, count * sizeof(T)));
+        CHECK_CUDA_ERROR(cudaMalloc(&ptr, n_elements_ * sizeof(T)));
         refCount = new int(1);
+        n_elements = n_elements_;
     }
 
     // Copy constructor
@@ -29,6 +23,7 @@ public:
     {
         ptr = other.ptr;
         refCount = other.refCount;
+        n_elements = other.n_elements;
         (*refCount)++;
     }
 
@@ -37,8 +32,10 @@ public:
     {
         ptr = other.ptr;
         refCount = other.refCount;
+        n_elements = other.n_elements;
         other.ptr = nullptr;
         other.refCount = nullptr;
+        other.n_elements = 0;
     }
 
     // Copy assignment operator
@@ -49,6 +46,7 @@ public:
             decrementRefCount();
             ptr = other.ptr;
             refCount = other.refCount;
+            n_elements = other.n_elements;
             (*refCount)++;
         }
         return *this;
@@ -62,8 +60,10 @@ public:
             decrementRefCount();
             ptr = other.ptr;
             refCount = other.refCount;
+            n_elements = other.n_elements;
             other.ptr = nullptr;
             other.refCount = nullptr;
+            other.n_elements = 0;
         }
         return *this;
     }
@@ -92,9 +92,26 @@ public:
         return refCount != nullptr ? *refCount : 0;
     }
 
+    // Dereferencing operator
+    T &operator*() const
+    {
+        return *ptr;
+    }
+
+    void copy_to_device(const T *source) const
+    {
+        CHECK_CUDA_ERROR(cudaMemcpy(ptr, source, n_elements * sizeof(T), cudaMemcpyHostToDevice));
+    }
+
+    void copy_to_host(T *destination) const
+    {
+        CHECK_CUDA_ERROR(cudaMemcpy(destination, ptr, n_elements * sizeof(T), cudaMemcpyDeviceToHost));
+    }
+
 private:
     T *ptr;
     int *refCount;
+    int n_elements;
 
     // Decrement the reference count and free the device memory if the count reaches zero
     void decrementRefCount()

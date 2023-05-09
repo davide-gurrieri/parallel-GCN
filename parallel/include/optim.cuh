@@ -21,15 +21,10 @@ struct AdamParams
 struct AdamVariable
 {
 public:
-    inline static natural count = 0;
-    real *dev_data, *dev_grad;
-    dev_shared_ptr<real> dev_m, dev_v;
+    dev_shared_ptr<real> dev_data, dev_grad, dev_m, dev_v;
     natural size;
     bool decay;
     AdamVariable(shared_ptr<Variable>, bool);
-    // AdamVariable(const AdamVariable &) = delete;
-    //  AdamVariable &operator=(const AdamVariable &adam_var);
-    //~AdamVariable();
 };
 
 // ##################################################################################

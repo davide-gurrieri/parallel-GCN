@@ -2,23 +2,22 @@
 
 // ##################################################################################
 
-Variable::Variable(natural size_, bool requires_grad, curandState *dev_rand_states_) : size(size_), dev_rand_states(dev_rand_states_)
+Variable::Variable(natural size_, bool requires_grad, dev_shared_ptr<curandState> dev_rand_states_) : size(size_)
 {
-    size = size_;
-    CHECK_CUDA_ERROR(cudaMalloc(&dev_data, size * sizeof(real)));
+    dev_data = dev_shared_ptr<real>(size);
     if (requires_grad)
-        CHECK_CUDA_ERROR(cudaMalloc(&dev_grad, size * sizeof(real)));
+        dev_grad = dev_shared_ptr<real>(size);
     else
-        dev_grad = nullptr;
-}
+        dev_grad = dev_shared_ptr<real>();
 
-// ##################################################################################
-
-Variable::~Variable()
-{
-    CHECK_CUDA_ERROR(cudaFree(dev_data));
-    if (dev_grad)
-        CHECK_CUDA_ERROR(cudaFree(dev_grad));
+    if (dev_rand_states_.get())
+    {
+        dev_rand_states = dev_rand_states_;
+    }
+    else
+    {
+        dev_rand_states = dev_shared_ptr<curandState>();
+    }
 }
 
 // ##################################################################################
@@ -36,7 +35,7 @@ void Variable::glorot(natural in_size, natural out_size)
     real scale = range * 2;
     dim3 n_blocks(CEIL(size, N_THREADS));
     dim3 n_threads(N_THREADS);
-    glorot_kernel<<<n_blocks, n_threads>>>(dev_data, size, scale, dev_rand_states);
+    glorot_kernel<<<n_blocks, n_threads>>>(dev_data.get(), size, scale, dev_rand_states.get());
 }
 
 // ##################################################################################
