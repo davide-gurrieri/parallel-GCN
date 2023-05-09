@@ -39,3 +39,28 @@ void Variable::glorot(natural in_size, natural out_size)
 }
 
 // ##################################################################################
+
+__global__ void zero_kernel(real *data, natural size)
+{
+    natural i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size)
+        data[i] = static_cast<real>(0.);
+}
+
+void Variable::zero()
+{
+    dim3 n_blocks(CEIL(size, N_THREADS));
+    dim3 n_threads(N_THREADS);
+    zero_kernel<<<n_blocks, n_threads>>>(dev_data.get(), size);
+    CHECK_CUDA_ERROR(cudaGetLastError());
+}
+
+void Variable::zero_grad()
+{
+    dim3 n_blocks(CEIL(size, N_THREADS));
+    dim3 n_threads(N_THREADS);
+    zero_kernel<<<n_blocks, n_threads>>>(dev_grad.get(), size);
+    CHECK_CUDA_ERROR(cudaGetLastError());
+}
+
+// ##################################################################################
