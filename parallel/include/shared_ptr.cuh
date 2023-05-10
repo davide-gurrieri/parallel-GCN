@@ -108,6 +108,11 @@ public:
         CHECK_CUDA_ERROR(cudaMemcpy(destination, ptr, n_elements * sizeof(T), cudaMemcpyDeviceToHost));
     }
 
+    void set_zero() const
+    {
+        CHECK_CUDA_ERROR(cudaMemset(ptr, 0, n_elements * sizeof(T)));
+    }
+
 private:
     T *ptr;
     int *refCount;
