@@ -1,16 +1,27 @@
 #include "../include/module.h"
+
+#include <cmath>
+
 #include "../include/rand.h"
 #include "../include/timer.h"
-#include <cmath>
 
 // ################################################################################################################
 /**
  * Dense matrix multiplication layer.
  */
-Matmul::Matmul(Variable *a, Variable *b, Variable *c, int m, int n, int p)
-    : a(a), b(b), c(c), m(m), n(n), p(p) {}
+Matmul::Matmul(Variable* a, Variable* b, Variable* c, int m, int n, int p)
+  : a(a)
+  , b(b)
+  , c(c)
+  , m(m)
+  , n(n)
+  , p(p)
+{
+}
 
-void Matmul::forward(bool training) {
+void
+Matmul::forward(bool training)
+{
   timer_start(TMR_MATMUL_FW);
   c->zero();
   // the result c is an N x F matrix, i.e. m x p here
@@ -22,7 +33,9 @@ void Matmul::forward(bool training) {
   timer_stop(TMR_MATMUL_FW);
 }
 
-void Matmul::backward() {
+void
+Matmul::backward()
+{
   timer_start(TMR_MATMUL_BW);
   a->zero_grad(); // N x H i.e. m x n
   b->zero_grad(); // H x F i.e. n x p
@@ -33,7 +46,7 @@ void Matmul::backward() {
       for (int k = 0; k < p; k++) {
         tmp += c->grad[i * p + k] * b->data[j * p + k]; // a = c * b^T
         b->grad[j * p + k] +=
-            c->grad[i * p + k] * a->data[i * n + j]; // b = a^T * c
+          c->grad[i * p + k] * a->data[i * n + j]; // b = a^T * c
       }
       a->grad[i * n + j] = tmp;
     }
@@ -45,18 +58,33 @@ void Matmul::backward() {
 /**
  * A sparse matrix multiplication layer.
  */
-SparseMatmul::SparseMatmul(Variable *a, Variable *b, Variable *c,
-                           SparseIndex *sp, int m, int n, int p)
-    : a(a), b(b), c(c), sp(sp), m(m), n(n), p(p) {}
+SparseMatmul::SparseMatmul(Variable* a,
+                           Variable* b,
+                           Variable* c,
+                           SparseIndex* sp,
+                           int m,
+                           int n,
+                           int p)
+  : a(a)
+  , b(b)
+  , c(c)
+  , sp(sp)
+  , m(m)
+  , n(n)
+  , p(p)
+{
+}
 
-void SparseMatmul::forward(bool training) {
+void
+SparseMatmul::forward(bool training)
+{
   timer_start(TMR_SPMATMUL_FW);
   c->zero();
   // store in c the result of a * b (layer1_var1 = X * W_0)
-  for (int i = 0; i < sp->indptr.size() - 1;
-       i++) // iterate over rows of c (X), "sp->indptr.size() - 1" is N
-    for (int jj = sp->indptr[i]; jj < sp->indptr[i + 1];
-         jj++) {                  // iterate over columns of X
+  // iterate over rows of c (X), "sp->indptr.size() - 1" is N
+  for (int i = 0; i < sp->indptr.size() - 1; i++)
+    // iterate over columns of X
+    for (int jj = sp->indptr[i]; jj < sp->indptr[i + 1]; jj++) {
       int j = sp->indices[jj];    // get the column index of the i-th row of X
       for (int k = 0; k < p; k++) // iterate over columns of c (W_0)
         c->data[i * p + k] += a->data[jj] * b->data[j * p + k];
@@ -64,7 +92,9 @@ void SparseMatmul::forward(bool training) {
   timer_stop(TMR_SPMATMUL_FW);
 }
 
-void SparseMatmul::backward() {
+void
+SparseMatmul::backward()
+{
   timer_start(TMR_SPMATMUL_BW);
   b->zero_grad();
   int row = 0;
@@ -82,10 +112,17 @@ void SparseMatmul::backward() {
 /**
  * A specialized sparse matrix multiplication for graphs.
  */
-GraphSum::GraphSum(Variable *in, Variable *out, SparseIndex *graph, int dim)
-    : in(in), out(out), graph(graph), dim(dim) {}
+GraphSum::GraphSum(Variable* in, Variable* out, SparseIndex* graph, int dim)
+  : in(in)
+  , out(out)
+  , graph(graph)
+  , dim(dim)
+{
+}
 
-void GraphSum::forward(bool training) {
+void
+GraphSum::forward(bool training)
+{
   timer_start(TMR_GRAPHSUM_FW);
   out->zero();
   for (int src = 0; src < graph->indptr.size() - 1; src++)
@@ -103,7 +140,9 @@ void GraphSum::forward(bool training) {
   timer_stop(TMR_GRAPHSUM_FW);
 }
 
-void GraphSum::backward() {
+void
+GraphSum::backward()
+{
   timer_start(TMR_GRAPHSUM_BW);
   in->zero_grad();
   for (int src = 0; src < graph->indptr.size() - 1; src++)
@@ -124,11 +163,21 @@ void GraphSum::backward() {
  * a loss is computed to penalize the proabability based on how far it is with
  * respect to the actual expected value. Also called logaritmic loss.
  */
-CrossEntropyLoss::CrossEntropyLoss(Variable *logits, int *truth, float *loss,
-                                   int num_classes)
-    : logits(logits), truth(truth), loss(loss), num_classes(num_classes) {}
 
-void CrossEntropyLoss::forward(bool training) {
+CrossEntropyLoss::CrossEntropyLoss(Variable* logits,
+                                   int* truth,
+                                   float* loss,
+                                   int num_classes)
+  : logits(logits)
+  , truth(truth)
+  , loss(loss)
+  , num_classes(num_classes)
+{
+}
+
+void
+CrossEntropyLoss::forward(bool training)
+{
   timer_start(TMR_LOSS_FW);
   float total_loss = 0;
   int count = 0;
@@ -140,8 +189,8 @@ void CrossEntropyLoss::forward(bool training) {
     if (truth[i] < 0) // only train labels
       continue;
     count++; // count the number of training nodes (labels)
-    float *logit =
-        &logits->data[i * num_classes]; // output row of the i-th node
+    float* logit =
+      &logits->data[i * num_classes]; // output row of the i-th node
     float max_logit = -1e30, sum_exp = 0;
     // get the maximum value of each node
     for (int j = 0; j < num_classes; j++)
@@ -164,12 +213,15 @@ void CrossEntropyLoss::forward(bool training) {
 
   *loss = total_loss / count;
   if (training)
-    for (float &i : logits->grad)
+    for (float& i : logits->grad)
       i /= count;
   timer_stop(TMR_LOSS_FW);
 }
 
-void CrossEntropyLoss::backward() {}
+void
+CrossEntropyLoss::backward()
+{
+}
 
 // ################################################################################################################
 
@@ -177,14 +229,20 @@ void CrossEntropyLoss::backward() {}
  * Rectified Linear Unit activation function.
  * If input is negative it will output 0.
  */
-ReLU::ReLU(Variable *in) {
+ReLU::ReLU(Variable* in)
+{
   this->in = in;
   mask = new bool[in->data.size()];
 }
 
-ReLU::~ReLU() { delete[] mask; }
+ReLU::~ReLU()
+{
+  delete[] mask;
+}
 
-void ReLU::forward(bool training) {
+void
+ReLU::forward(bool training)
+{
   timer_start(TMR_RELU_FW);
   for (int i = 0; i < in->data.size(); i++) {
     bool keep = in->data[i] > 0;
@@ -196,7 +254,9 @@ void ReLU::forward(bool training) {
   timer_stop(TMR_RELU_FW);
 }
 
-void ReLU::backward() {
+void
+ReLU::backward()
+{
   timer_start(TMR_RELU_BW);
   for (int i = 0; i < in->data.size(); i++)
     if (!mask[i])
@@ -211,7 +271,8 @@ void ReLU::backward() {
  * each step during training time to prevent overfitting. Inputs that are not
  * set to 0 are scaled up by 1/(1-P).
  */
-Dropout::Dropout(Variable *in, float p) {
+Dropout::Dropout(Variable* in, float p)
+{
   this->in = in;
   this->p = p;
   if (!in->grad.empty())
@@ -220,12 +281,15 @@ Dropout::Dropout(Variable *in, float p) {
     mask = nullptr;
 }
 
-Dropout::~Dropout() {
+Dropout::~Dropout()
+{
   if (mask)
     delete[] mask;
 }
 
-void Dropout::forward(bool training) {
+void
+Dropout::forward(bool training)
+{
   if (!training)
     return;
   timer_start(TMR_DROPOUT_FW);
@@ -240,7 +304,9 @@ void Dropout::forward(bool training) {
   timer_stop(TMR_DROPOUT_FW);
 }
 
-void Dropout::backward() {
+void
+Dropout::backward()
+{
   if (!mask)
     return;
   timer_start(TMR_DROPOUT_BW);

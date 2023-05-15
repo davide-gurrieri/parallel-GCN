@@ -3,7 +3,8 @@
 #include <sstream>
 
 using namespace std;
-Parser::Parser(GCNParams *gcnParams, GCNData *gcnData, std::string graph_name) {
+Parser::Parser(GCNParams* gcnParams, GCNData* gcnData, std::string graph_name)
+{
   this->graph_file.open("data/" + graph_name + ".graph");
   this->split_file.open("data/" + graph_name + ".split");
   this->svmlight_file.open("data/" + graph_name + ".svmlight");
@@ -15,9 +16,11 @@ Parser::Parser(GCNParams *gcnParams, GCNData *gcnData, std::string graph_name) {
  * By parsing the .graph file containing the ordered edgelist of the graph it
  * populates a CSR representation of the graph
  */
-void Parser::parseGraph() {
-  auto &graph_sparse_index =
-      this->gcnData->graph; // Reference to "graph" member (SparseIndex)
+void
+Parser::parseGraph()
+{
+  auto& graph_sparse_index =
+    this->gcnData->graph; // Reference to "graph" member (SparseIndex)
 
   graph_sparse_index.indptr.push_back(0);
   int node = 0;
@@ -50,7 +53,9 @@ void Parser::parseGraph() {
   gcnParams->num_nodes = node;
 }
 
-bool Parser::isValidInput() {
+bool
+Parser::isValidInput()
+{
   return graph_file.is_open() && split_file.is_open() &&
          svmlight_file.is_open();
 }
@@ -59,12 +64,14 @@ bool Parser::isValidInput() {
  * The SVMLight allows for storing features in a sparse way therefore even the
  * features are stored using a CSR approach to index the data in feature_val
  */
-void Parser::parseNode() {
-  auto &feature_sparse_index =
-      this->gcnData
-          ->feature_index; // Reference to "feature_index" member (SparseIndex)
-  auto &feature_val = this->gcnData->feature_value; // std::vector<float>
-  auto &labels = this->gcnData->label;              // std::vector<int>
+void
+Parser::parseNode()
+{
+  auto& feature_sparse_index =
+    this->gcnData
+      ->feature_index; // Reference to "feature_index" member (SparseIndex)
+  auto& feature_val = this->gcnData->feature_value; // std::vector<float>
+  auto& labels = this->gcnData->label;              // std::vector<int>
 
   feature_sparse_index.indptr.push_back(0);
 
@@ -101,8 +108,8 @@ void Parser::parseNode() {
       char col;
       kv_ss >> k >> col >> v;
 
-      feature_val.push_back(1.0);
-      // feature_val.push_back(v);
+      // feature_val.push_back(1.0);
+      feature_val.push_back(v);
       feature_sparse_index.indices.push_back(k);
       feature_sparse_index.indptr.back() += 1;
       max_idx = max(max_idx, k);
@@ -112,8 +119,10 @@ void Parser::parseNode() {
   gcnParams->output_dim = max_label + 1;
 }
 
-void Parser::parseSplit() {
-  auto &split = this->gcnData->split;
+void
+Parser::parseSplit()
+{
+  auto& split = this->gcnData->split;
 
   while (true) {
     std::string line;
@@ -124,13 +133,17 @@ void Parser::parseSplit() {
   }
 }
 
-void vprint(std::vector<int> v) {
+void
+vprint(std::vector<int> v)
+{
   for (int i : v)
     printf("%i ", i);
   printf("\n");
 }
 
-bool Parser::parse() {
+bool
+Parser::parse()
+{
   if (!isValidInput())
     return false;
   this->parseGraph();
