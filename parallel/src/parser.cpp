@@ -3,7 +3,8 @@
 #include <sstream>
 
 using namespace std;
-Parser::Parser(GCNParams *gcnParams, GCNData *gcnData, std::string graph_name) {
+Parser::Parser(GCNParams* gcnParams, GCNData* gcnData, std::string graph_name)
+{
   this->graph_file.open("data/" + graph_name + ".graph");
   this->split_file.open("data/" + graph_name + ".split");
   this->svmlight_file.open("data/" + graph_name + ".svmlight");
@@ -15,11 +16,13 @@ Parser::Parser(GCNParams *gcnParams, GCNData *gcnData, std::string graph_name) {
  * By parsing the .graph file containing the ordered edgelist of the graph it
  * populates a CSR representation of the graph
  */
-void Parser::parseGraph() {
-  auto &graph_sparse_index =
-      this->gcnData->graph; // Reference to "graph" member (SparseIndex)
+void
+Parser::parseGraph()
+{
+  auto& graph =
+    this->gcnData->graph; // Reference to "graph" member (SparseIndex)
 
-  graph_sparse_index.indptr.push_back(0);
+  graph.indptr.push_back(0);
   int node = 0;
   // Iterate over the nodes
   while (true) {
@@ -29,9 +32,9 @@ void Parser::parseGraph() {
       break;
 
     // Implicit self connection (node X is connected with node X)
-    graph_sparse_index.indices.push_back(node);
+    graph.indices.push_back(node);
     // add the value that cumultatively counts the number of row elements
-    graph_sparse_index.indptr.push_back(graph_sparse_index.indptr.back() + 1);
+    graph.indptr.push_back(graph.indptr.back() + 1);
     node++;
 
     // iterate over the neighbours of the current node in order to populate the
@@ -42,15 +45,17 @@ void Parser::parseGraph() {
       ss >> neighbor;
       if (ss.fail())
         break;
-      graph_sparse_index.indices.push_back(neighbor);
-      graph_sparse_index.indptr.back() += 1;
+      graph.indices.push_back(neighbor);
+      graph.indptr.back() += 1;
     }
   }
 
   gcnParams->num_nodes = node;
 }
 
-bool Parser::isValidInput() {
+bool
+Parser::isValidInput()
+{
   return graph_file.is_open() && split_file.is_open() &&
          svmlight_file.is_open();
 }
@@ -59,12 +64,14 @@ bool Parser::isValidInput() {
  * The SVMLight allows for storing features in a sparse way therefore even the
  * features are stored using a CSR approach to index the data in feature_val
  */
-void Parser::parseNode() {
-  auto &feature_sparse_index =
-      this->gcnData
-          ->feature_index; // Reference to "feature_index" member (SparseIndex)
-  auto &feature_val = this->gcnData->feature_value; // std::vector<float>
-  auto &labels = this->gcnData->label;              // std::vector<int>
+void
+Parser::parseNode()
+{
+  auto& feature_sparse_index =
+    this->gcnData
+      ->feature_index; // Reference to "feature_index" member (SparseIndex)
+  auto& feature_val = this->gcnData->feature_value; // std::vector<float>
+  auto& labels = this->gcnData->label;              // std::vector<int>
 
   feature_sparse_index.indptr.push_back(0);
 
@@ -101,8 +108,7 @@ void Parser::parseNode() {
       char col;
       kv_ss >> k >> col >> v;
 
-      feature_val.push_back(1.0);
-      // feature_val.push_back(v);
+      feature_val.push_back(v);
       feature_sparse_index.indices.push_back(k);
       feature_sparse_index.indptr.back() += 1;
       max_idx = max(max_idx, k);
@@ -112,25 +118,57 @@ void Parser::parseNode() {
   gcnParams->output_dim = max_label + 1;
 }
 
-void Parser::parseSplit() {
-  auto &split = this->gcnData->split;
+void
+Parser::parseSplit()
+{
+  auto& split = this->gcnData->split;
 
   while (true) {
     std::string line;
     getline(split_file, line);
     if (split_file.eof())
       break;
-    split.push_back(std::stoi(line));
+    int val = std::stoi(line);
+    if (val == 1)
+      gcnParams->train_dim++;
+    else if (val == 2)
+      gcnParams->val_dim++;
+    else if (val == 3)
+      gcnParams->test_dim++;
+
+    split.push_back(val);
   }
 }
 
-void vprint(std::vector<int> v) {
+void
+Parser::calculateGraphValues()
+{
+  auto& graph_idx = this->gcnData->graph;
+  auto& graph_val = this->gcnData->graph_value;
+
+  graph_val.resize(graph_idx.indices.size());
+  // iterate over the nodes
+  for (int src = 0; src < graph_idx.indptr.size() - 1; src++) {
+    for (int i = graph_idx.indptr[src]; i < graph_idx.indptr[src + 1]; i++) {
+      int dst = graph_idx.indices[i];
+      graph_val[i] =
+        1.0 / sqrtf((graph_idx.indptr[src + 1] - graph_idx.indptr[src]) *
+                    (graph_idx.indptr[dst + 1] - graph_idx.indptr[dst]));
+    }
+  }
+}
+
+void
+vprint(std::vector<int> v)
+{
   for (int i : v)
     printf("%i ", i);
   printf("\n");
 }
 
-bool Parser::parse() {
+bool
+Parser::parse()
+{
   if (!isValidInput())
     return false;
   this->parseGraph();
@@ -139,5 +177,6 @@ bool Parser::parse() {
   std::cout << "Parse Node Succeeded." << endl;
   this->parseSplit();
   std::cout << "Parse Split Succeeded." << endl;
+  this->calculateGraphValues();
   return true;
 }

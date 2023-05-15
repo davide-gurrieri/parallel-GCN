@@ -113,6 +113,11 @@ public:
         CHECK_CUDA_ERROR(cudaMemset(ptr, 0, n_elements * sizeof(T)));
     }
 
+    int get_n_elements() const
+    {
+        return n_elements;
+    }
+
 private:
     T *ptr;
     int *refCount;

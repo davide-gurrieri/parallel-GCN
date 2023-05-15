@@ -31,6 +31,7 @@ public:
 
 class Adam
 {
+    dev_shared_ptr<AdamParams> dev_params;
     AdamParams params;
     int step_count;
     std::vector<AdamVariable> vars;
@@ -38,7 +39,7 @@ class Adam
 public:
     Adam() {}
     Adam(std::vector<std::pair<shared_ptr<Variable>, bool>> vars_, AdamParams params_);
-    // void step();
+    void step();
 };
 
 // ##################################################################################

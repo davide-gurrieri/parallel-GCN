@@ -2,7 +2,7 @@
 
 // ##################################################################################
 
-Variable::Variable(natural size_, bool requires_grad, dev_shared_ptr<curandState> dev_rand_states_) : size(size_)
+Variable::Variable(natural size_, bool requires_grad, dev_shared_ptr<randState> dev_rand_states_) : size(size_)
 {
     dev_data = dev_shared_ptr<real>(size);
     if (requires_grad)
@@ -16,13 +16,15 @@ Variable::Variable(natural size_, bool requires_grad, dev_shared_ptr<curandState
     }
     else
     {
-        dev_rand_states = dev_shared_ptr<curandState>();
+        dev_rand_states = dev_shared_ptr<randState>();
     }
+
+    std::cout << "Variable created with size " << size << std::endl;
 }
 
 // ##################################################################################
 
-__global__ void glorot_kernel(real *data, natural size, real scale, curandState *state)
+__global__ void glorot_kernel(real *data, natural size, real scale, randState *state)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size)
@@ -60,3 +62,19 @@ void Variable::zero_grad()
 }
 
 // ##################################################################################
+
+void Variable::print(natural col) const
+{
+
+    real *data = new real[size];
+    dev_grad.copy_to_host(data);
+    int count = 0;
+    for (natural i = 0; i < 20 * col && i < size; i++)
+    {
+        printf("%.4f ", data[i]);
+        count++;
+        if (count % col == 0)
+            printf("\n");
+    }
+    delete[] data;
+}
