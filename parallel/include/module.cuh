@@ -10,6 +10,7 @@ using std::unique_ptr;
 #include "../include/timer.h"
 #include "../include/sparse.cuh"
 #include "../include/shared_ptr.cuh"
+#include "../include/reduction.cuh" // for CrossEntropyLoss
 
 // ##################################################################################
 
