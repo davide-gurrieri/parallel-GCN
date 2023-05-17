@@ -651,34 +651,6 @@ __global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const 
     }
 }
 
-/*
-
-// reduction
-__device__ float warp_reduce(float val)
-{
-    int warp_size = 32;
-    for (int offset = warp_size / 2; offset > 0; offset /= 2)
-        val += __shfl_down_sync(0xFFFFFFFF, val, offset);
-    return val;
-}
-
-__global__ void reduce(real *x, real *res, int n)
-{
-    int warp_size = 32;
-    real sum = float(0); // Initialize partial sum for this thread;
-    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += blockDim.x * gridDim.x)
-    {
-        sum += x[i]; // Each thread accumulates N / total_threads values;
-    }
-    sum = warp_reduce(sum);
-    // Obtain the sum of values in the current warp;
-    if ((threadIdx.x & (warp_size - 1)) == 0)
-        // Same as (threadIdx.x % warp_size) == 0 but faster
-        atomicAdd(res, sum);
-    // The first thread in the warp updates the output;
-}
-*/
-
 void CrossEntropyLoss::forward(bool training)
 {
 
@@ -692,22 +664,27 @@ void CrossEntropyLoss::forward(bool training)
     const natural n_blocks = std::min(CEIL(DIM, N_THREADS), static_cast<natural>(N_BLOCKS));
     cross_entropy_loss_kernel<<<n_blocks, N_THREADS>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss.get(), num_classes, num_samples, training);
     // cross_entropy_loss_kernel<<<DIM, 1>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss.get(), num_classes, num_samples, training);
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+    CHECK_CUDA_ERROR(cudaGetLastError());
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     // print_gpu<real>(dev_loss, DIM, DIM);
 
     // METODO 1 gpu
-    /*
-        dev_shared_ptr<real> dev_loss_res(1);
-        reduce<<<CEIL(DIM, 1024), 1024>>>(dev_loss.get(), dev_loss_res.get(), DIM);
-        dev_loss_res.copy_to_host(loss);
-    */
+    dev_shared_ptr<real> dev_loss_res(1);
+    dev_loss_res.set_zero();
+    reduce<<<CEIL(n_blocks, N_THREADS), N_THREADS>>>(dev_loss.get(), dev_loss_res.get(), DIM);
+    dev_loss_res.copy_to_host(loss);
+    *loss /= num_samples;
+
     // METODO 2 cpu
+    /*
     std::vector<real> loss_cpu(DIM);
     dev_loss.copy_to_host(loss_cpu.data());
     // print_cpu(loss_cpu, DIM);
     *loss = std::accumulate(loss_cpu.begin(), loss_cpu.end(), static_cast<real>(0)) / num_samples;
     // std::cout << "loss: " << std::accumulate(loss_cpu.begin(), loss_cpu.end(), static_cast<real>(0)) / num_samples << std::endl;
+*/
+    // METODO 3 reduce_gpu()
+    // *loss = reduce_gpu(dev_loss.get(), DIM) / num_samples;
 
     timer_stop(TMR_LOSS_FW);
 }
