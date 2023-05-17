@@ -119,7 +119,25 @@ void GCN::initialize_truth()
 }
 
 // ##################################################################################
+// sembra più lento
+__global__ void set_input_kernel(real *dev_data, real *dev_feature_value, natural size)
+{
+    natural id = blockIdx.x * blockDim.x + threadIdx.x;
+#pragma unroll
+    for (natural i = id; i < size; i += blockDim.x * gridDim.x)
+    {
+        dev_data[i] = dev_feature_value[i];
+    }
+}
 
+void GCN::set_input()
+{
+    const natural n_blocks = std::min(CEIL(input->size, N_THREADS), static_cast<natural>(N_BLOCKS));
+    set_input_kernel<<<n_blocks, N_THREADS>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
+    CHECK_CUDA_ERROR(cudaGetLastError());
+}
+
+/*
 __global__ void set_input_kernel(real *dev_data, real *dev_feature_value, natural size)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -134,9 +152,34 @@ void GCN::set_input()
     set_input_kernel<<<n_blocks, n_threads>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
     CHECK_CUDA_ERROR(cudaGetLastError());
 }
+*/
 
 // ##################################################################################
 
+// più lenta di quella commentata, capire perché
+__global__ void set_truth_kernel(integer *dev_truth, natural *dev_split, integer *dev_label, natural size, natural current_split)
+{
+    natural id = blockIdx.x * blockDim.x + threadIdx.x;
+#pragma unroll
+    for (natural i = id; i < size; i += blockDim.x * gridDim.x)
+        dev_truth[i] = dev_split[i] == current_split ? dev_label[i] : -1;
+}
+
+void GCN::set_truth(int current_split)
+{
+    if (current_split == 1)
+        modules.back()->set_num_samples(params->train_dim);
+    else if (current_split == 2)
+        modules.back()->set_num_samples(params->val_dim);
+    else if (current_split == 3)
+        modules.back()->set_num_samples(params->test_dim);
+
+    const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), static_cast<natural>(N_BLOCKS));
+    set_truth_kernel<<<n_blocks, N_THREADS>>>(dev_truth.get(), dev_data.dev_split.get(), dev_data.dev_label.get(), params->num_nodes, current_split);
+    CHECK_CUDA_ERROR(cudaGetLastError());
+}
+
+/*
 __global__ void set_truth_kernel(integer *dev_truth, natural *dev_split, integer *dev_label, natural size, natural current_split)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -158,13 +201,14 @@ void GCN::set_truth(int current_split)
     set_truth_kernel<<<n_blocks, n_threads>>>(dev_truth.get(), dev_data.dev_split.get(), dev_data.dev_label.get(), params->num_nodes, current_split);
     CHECK_CUDA_ERROR(cudaGetLastError());
 }
+*/
 
 // ##################################################################################
 
 real GCN::get_l2_penalty()
 {
     real l2 = 0;
-    std::vector<real> weight(params->input_dim * params->hidden_dim);
+    std::vector<real> weight(params->input_dim * params->hidden_dim, 0.);
     variables[2]->dev_data.copy_to_host(weight.data());
     for (const real &x : weight)
         l2 += x * x;
@@ -180,8 +224,8 @@ std::pair<real, real> GCN::eval(natural current_split)
     set_truth(current_split);
     for (const auto &m : modules)
         m->forward(false);
-    float test_loss = loss + get_l2_penalty();
-    float test_acc = get_accuracy();
+    real test_loss = loss + get_l2_penalty();
+    real test_acc = get_accuracy();
     return {test_loss, test_acc};
 }
 
@@ -224,7 +268,7 @@ std::pair<real, real> GCN::train_epoch()
 {
     // print_cpu(data->feature_value, data->feature_value.size());
     // print_gpu(dev_data.dev_feature_value, dev_data.dev_feature_index.indices_size, dev_data.dev_feature_index.indices_size);
-    set_input();  // set the input data
+    // set_input();  // set the input data
     set_truth(1); // get the true labels for the dataset with split == 1 (train)
 
     // print_gpu<integer>(dev_truth, params->num_nodes, params->num_nodes);
@@ -234,7 +278,7 @@ std::pair<real, real> GCN::train_epoch()
     real train_loss = loss + get_l2_penalty();
 
     float train_acc = get_accuracy(); // compute the accuracy comparing the
-                                      // prediction against the truth
+                                      //  prediction against the truth
 
     for (int i = modules.size() - 1; i >= 0; i--)
         modules[i]->backward(); // do a backward pass on the layers
@@ -267,12 +311,12 @@ std::pair<real, real> GCN::train_epoch()
 void GCN::run()
 {
     natural epoch = 1;
-    real total_time = 0.0;
+    // real total_time = 0.0;
     std::vector<real> loss_history;
     // Iterate the training process based on the selected number of epoch
     for (; epoch <= params->epochs; epoch++)
     {
-        real train_loss, train_acc, val_loss, val_acc;
+        real train_loss{0.f}, train_acc{0.f}, val_loss{0.f}, val_acc{0.f};
         timer_start(TMR_TRAIN); // just for timing purposes
         std::tie(train_loss, train_acc) =
             train_epoch(); // train the epoch and record the current train_loss and
@@ -280,11 +324,7 @@ void GCN::run()
                            // eval the model at the current step in order to obtain the val_loss and val_accuracy
 
         std::tie(val_loss, val_acc) = eval(2);
-        /*
-        printf("epoch=%d train_loss=%.5f"
-               "time=%.5f\n",
-               epoch, train_loss, timer_stop(TMR_TRAIN));
-    */
+
         printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f "
                "time=%.5f\n",
                epoch, train_loss, train_acc, val_loss, val_acc,
@@ -319,6 +359,7 @@ void GCN::run()
     PRINT_TIMER_AVERAGE(TMR_DROPOUT_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_DROPOUT_BW, epoch);
     PRINT_TIMER_AVERAGE(TMR_LOSS_FW, epoch);
+    PRINT_TIMER_AVERAGE(TMR_OPTIMIZER, epoch);
 
     float test_loss, test_acc;
     timer_start(TMR_TEST);
