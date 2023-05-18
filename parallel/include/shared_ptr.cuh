@@ -1,6 +1,7 @@
 #ifndef SHARED_PTR_CUH
 #define SHARED_PTR_CUH
 #include <cuda_runtime.h>
+#include <vector>
 #include "../include/utils.cuh"
 
 template <typename T>
@@ -16,6 +17,8 @@ public:
         CHECK_CUDA_ERROR(cudaMalloc(&ptr, n_elements_ * sizeof(T)));
         refCount = new int(1);
         n_elements = n_elements_;
+        CHECK_CUDA_ERROR(cudaMemset(ptr, 0, n_elements * sizeof(T)));
+        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     }
 
     // Copy constructor
@@ -111,11 +114,24 @@ public:
     void set_zero() const
     {
         CHECK_CUDA_ERROR(cudaMemset(ptr, 0, n_elements * sizeof(T)));
+        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     }
 
     int get_n_elements() const
     {
         return n_elements;
+    }
+
+    void print(unsigned col)
+    {
+        std::vector<T> host(n_elements);
+        copy_to_host(host.data());
+        for (int i = 0; i < n_elements; i++)
+        {
+            std::cout << host[i] << " ";
+            if ((i + 1) % col == 0)
+                std::cout << std::endl;
+        }
     }
 
 private:
