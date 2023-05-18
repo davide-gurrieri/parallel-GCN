@@ -20,6 +20,7 @@ public:
     virtual void forward(bool) = 0;
     virtual void backward() = 0;
     virtual void set_num_samples(natural){};
+    virtual natural get_num_samples() const { return 0; };
     virtual ~Module(){};
 };
 
@@ -116,12 +117,14 @@ class CrossEntropyLoss : public Module
     real *loss;
     natural num_classes;
     dev_shared_ptr<real> dev_loss;
+    dev_shared_ptr<real> dev_loss_res;
 
 public:
     natural num_samples;
     CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, real *loss_, natural num_classes_);
     ~CrossEntropyLoss(){};
     void set_num_samples(natural num_samples_);
+    natural get_num_samples() const;
     void forward(bool);
     void backward();
 };

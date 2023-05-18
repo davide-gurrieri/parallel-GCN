@@ -23,13 +23,12 @@ __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, randState
     for (natural i = id; i < size; i += blockDim.x * gridDim.x)
     {
         bool keep = curand_uniform(&s_rand_states[threadIdx.x]) >= p;
-        dev_data[i] *= keep ? scale : 0;
+        dev_data[i] *= keep ? scale : 0.f;
         if (dev_mask)
             dev_mask[i] = keep;
     }
 }
 */
-
 // needs curandStatePhilox4_32_10_t
 __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, randState *dev_rand_states,
                                        const natural size, const real p, const real scale)
@@ -79,7 +78,7 @@ __global__ void dropout_kernel_backward(real *dev_grad, const bool *mask, const 
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     for (natural i = id; i < size; i += blockDim.x * gridDim.x)
     {
-        dev_grad[i] *= mask[i] ? scale : 0;
+        dev_grad[i] *= mask[i] ? scale : 0.f;
     }
 }
 
@@ -89,7 +88,7 @@ void Dropout::backward()
         return;
     timer_start(TMR_DROPOUT_BW);
 
-    real scale = 1.0 / (1.0 - p);
+    const real scale = 1.0 / (1.0 - p);
     natural n_blocks = std::min(CEIL(in->size, N_THREADS), static_cast<natural>(N_BLOCKS));
     dropout_kernel_backward<<<n_blocks, N_THREADS>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -142,7 +141,7 @@ void SparseMatmul::forward(bool training)
 
 // ##################################################################################
 
-__global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real *c, const natural *indptr, const natural *indices, natural m, natural p)
+__global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real *c, const natural *indptr, const natural *indices, const natural m, const natural p)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
@@ -165,6 +164,7 @@ void SparseMatmul::backward()
 {
     timer_start(TMR_SPMATMUL_BW);
 
+    b->zero_grad();
     natural n_blocks = std::min(CEIL(m * p, N_THREADS), static_cast<natural>(N_BLOCKS));
     sparse_matmul_kernel_backward<<<n_blocks, N_THREADS>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -173,6 +173,37 @@ void SparseMatmul::backward()
     timer_stop(TMR_SPMATMUL_BW);
 }
 
+/*
+__global__ void cuda_SparseMatmul_backward_kernel(float *a_in, float *b_in, float *c_in, natural *indptr, natural *indices, int p)
+{
+    int i = blockIdx.x;
+    int k = threadIdx.x;
+
+#pragma unroll
+    for (int jj = indptr[i]; jj < indptr[i + 1]; jj++)
+    {
+        int j = indices[jj];
+        b_in[j * p + k] += c_in[i * p + k] * a_in[jj];
+    }
+}
+
+void SparseMatmul::backward()
+{
+    timer_start(TMR_SPMATMUL_BW);
+
+    b->zero_grad();
+    // TODO: when p larger than 1024?
+    if (sp->indptr_size <= 1)
+        return;
+    dim3 block(sp->indptr_size - 1, 1, 1);
+    dim3 thread_in_block(p, 1, 1);
+    cuda_SparseMatmul_backward_kernel<<<block, thread_in_block>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), p);
+    CHECK_CUDA_ERROR(cudaGetLastError());
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+
+    timer_stop(TMR_SPMATMUL_BW);
+}
+*/
 // GRAPHSUM
 // ##################################################################################
 
@@ -252,7 +283,7 @@ __global__ void relu_kernel_forward(real *dev_data, bool *dev_mask, const natura
         if (training)
             dev_mask[i] = keep;
         if (!keep)
-            dev_data[i] = 0;
+            dev_data[i] = 0.f;
     }
 }
 
@@ -270,14 +301,14 @@ void ReLU::forward(bool training)
 
 // ##################################################################################
 
-__global__ void relu_kernel_backward(real *d_in_grad, bool *d_mask, long unsigned int size)
+__global__ void relu_kernel_backward(real *d_in_grad, const bool *d_mask, const natural size)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
     for (natural i = id; i < size; i += blockDim.x * gridDim.x)
     {
         if (!d_mask[i])
-            d_in_grad[i] = 0;
+            d_in_grad[i] = 0.f;
     }
 }
 
@@ -593,6 +624,7 @@ void Matmul::backward()
     timer_start(TMR_MATMUL_BW);
 
     // b->zero_grad();
+    // a->zero_grad();
     const natural n_blocks_y_1 = std::min(CEIL(m, TILE_DIM), static_cast<natural>(N_BLOCKS));
     dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
     dim3 n_blocks_2(CEIL(p, TILE_DIM), CEIL(n, TILE_DIM));
@@ -612,24 +644,25 @@ void Matmul::backward()
 CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, real *loss_, natural num_classes_) : logits(logits_), dev_truth(dev_truth_), loss(loss_), num_classes(num_classes_)
 {
     dev_loss = dev_shared_ptr<real>(logits->size / num_classes); // N elements (number of nodes)
+    dev_loss_res = dev_shared_ptr<real>(1);
 }
 
 // ##################################################################################
 
-__global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const integer *dev_truth, real *dev_loss, const natural num_classes, const natural num_samples, bool training)
+__global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const integer *dev_truth, real *dev_loss, const natural num_classes, const natural num_nodes, const natural num_samples, bool training)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
-    for (natural i = id; i < num_samples; i += blockDim.x * gridDim.x)
+    for (natural i = id; i < num_nodes; i += blockDim.x * gridDim.x)
     {
         if (dev_truth[i] < 0)
             return;
         real *logit = &dev_data[i * num_classes];
-        real sum_exp = 0;
-        real max_logit = -1e30;
+        real sum_exp = 0.;
+        real max_logit = logit[0];
 #pragma unroll
         // get the maximum value of each node
-        for (natural j = 0; j < num_classes; j++)
+        for (natural j = 1; j < num_classes; j++)
             max_logit = fmax(max_logit, logit[j]);
 #pragma unroll
         for (natural j = 0; j < num_classes; j++)
@@ -655,23 +688,26 @@ void CrossEntropyLoss::forward(bool training)
 {
 
     timer_start(TMR_LOSS_FW);
+
     if (training)
         logits->zero_grad();
+
     dev_loss.set_zero();
     const natural DIM = logits->size / num_classes;
     // print_gpu<real>(dev_loss, DIM, DIM);
     // print_gpu<integer>(dev_truth, DIM, DIM);
     const natural n_blocks = std::min(CEIL(DIM, N_THREADS), static_cast<natural>(N_BLOCKS));
-    cross_entropy_loss_kernel<<<n_blocks, N_THREADS>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss.get(), num_classes, num_samples, training);
+    cross_entropy_loss_kernel<<<n_blocks, N_THREADS>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss.get(), num_classes, DIM, num_samples, training);
     // cross_entropy_loss_kernel<<<DIM, 1>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss.get(), num_classes, num_samples, training);
     CHECK_CUDA_ERROR(cudaGetLastError());
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     // print_gpu<real>(dev_loss, DIM, DIM);
 
     // METODO 1 gpu
-    dev_shared_ptr<real> dev_loss_res(1);
+
     dev_loss_res.set_zero();
-    reduce<<<CEIL(n_blocks, N_THREADS), N_THREADS>>>(dev_loss.get(), dev_loss_res.get(), DIM);
+    reduce<<<n_blocks, N_THREADS>>>(dev_loss.get(), dev_loss_res.get(), DIM);
+    *loss = 0;
     dev_loss_res.copy_to_host(loss);
     *loss /= num_samples;
 
@@ -697,3 +733,8 @@ void CrossEntropyLoss::set_num_samples(natural num_samples_)
 {
     num_samples = num_samples_;
 }
+
+natural CrossEntropyLoss::get_num_samples() const
+{
+    return num_samples;
+};

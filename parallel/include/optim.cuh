@@ -32,8 +32,8 @@ public:
 
 class Adam
 {
-    dev_shared_ptr<AdamParams> dev_params;
     AdamParams params;
+    dev_shared_ptr<real> weight_decay, beta1, beta2, eps;
     natural step_count;
     std::vector<AdamVariable> vars;
 

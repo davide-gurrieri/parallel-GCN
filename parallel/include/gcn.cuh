@@ -2,6 +2,7 @@
 #define GCN_CUH
 
 #include <cuda_runtime.h>
+#include <sys/time.h>
 
 #include <utility>
 
@@ -57,11 +58,14 @@ class GCN
   std::vector<unique_ptr<Module>> modules;
   std::vector<shared_ptr<Variable>> variables;
   shared_ptr<Variable> input, output;
-  unique_ptr<Adam> optimizer;
+  Adam optimizer;
   dev_shared_ptr<integer> dev_truth;
+  dev_shared_ptr<real> dev_l2_weight1;
+  dev_shared_ptr<real> dev_l2;
+  dev_shared_ptr<natural> dev_wrong;
 
   void set_input();
-  void set_truth(int current_split);
+  void set_truth(natural current_split);
 
   real get_accuracy();
   real get_l2_penalty();
@@ -71,7 +75,6 @@ class GCN
 public:
   real loss;
   DevGCNData dev_data;
-  // ! dev_shared_ptr<curandState> dev_rand_states;
   dev_shared_ptr<randState> dev_rand_states;
   GCNParams *params;
   GCN(GCNParams *params_, GCNData *data_);

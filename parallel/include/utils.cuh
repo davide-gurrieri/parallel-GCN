@@ -29,6 +29,13 @@ namespace cudaParams
 }
 */
 
+constexpr natural N_THREADS = 1024;
+constexpr natural N_THREADS_DROPOUT = 512;
+constexpr natural N_BLOCKS = 128; // 8 * 16 with 16 number of SM (multiProcessorCount)
+constexpr natural TILE_DIM = 16;
+constexpr natural SEED = 42;
+
+/*
 #define N_THREADS 1024
 #define N_THREADS_DROPOUT 512
 #define N_BLOCKS 128 // 8 * 16 with 16 number of SM (multiProcessorCount)
@@ -36,8 +43,18 @@ namespace cudaParams
 // #define TILE_DIM_Y 32 // 128
 // #define TILE_DIM_X 32 // 8
 #define SEED 42
+*/
+
+// #define CHECK_CUDA_ERROR(val) nothing((val))
+/*
+template <typename T>
+void nothing(T err)
+{
+}
+*/
 
 #define CHECK_CUDA_ERROR(val) check((val), #val, __FILE__, __LINE__)
+
 template <typename T>
 void check(T err, const char *const func, const char *const file,
            const int line)
