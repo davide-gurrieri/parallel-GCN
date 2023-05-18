@@ -13,7 +13,7 @@ public:
     dev_shared_ptr<real> dev_grad;
     natural size;
     dev_shared_ptr<randState> dev_rand_states;
-    void print(natural col) const;
+    void print(const std::string &what, natural col) const;
 
     Variable(natural size_, bool requires_grad = true, dev_shared_ptr<randState> dev_rand_states_ = dev_shared_ptr<randState>());
     void zero();

@@ -63,11 +63,20 @@ void Variable::zero_grad()
 
 // ##################################################################################
 
-void Variable::print(natural col) const
+void Variable::print(const std::string &what, natural col) const
 {
 
     real *data = new real[size];
-    dev_grad.copy_to_host(data);
+    if (what == "data")
+        dev_data.copy_to_host(data);
+    else if (what == "grad")
+        dev_grad.copy_to_host(data);
+    else
+    {
+        delete[] data;
+        std::cerr << "Variable::print: what must be either 'data' or 'grad'" << std::endl;
+        exit(EXIT_FAILURE);
+    }
     int count = 0;
     for (natural i = 0; i < 20 * col && i < size; i++)
     {
