@@ -103,7 +103,7 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
 __global__ void initialize_random_kernel(randState *dev_rand_states, natural seed)
 {
     // curand_init(seed, index, offset, &state);
-    curand_init(seed, threadIdx.x, 0, &dev_rand_states[threadIdx.x]);
+    curand_init(seed + threadIdx.x * seed, threadIdx.x, 0, &dev_rand_states[threadIdx.x]);
 }
 
 void GCN::initialize_random()
