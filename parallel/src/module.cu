@@ -155,7 +155,8 @@ __global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real
         for (natural jj = indptr[row]; jj < indptr[row + 1]; jj++)
         {
             natural j = indices[jj];
-            b[j * p + col] += a[jj] * c[row * p + col];
+            atomicAdd(&b[j * p + col], a[jj] * c[row * p + col]);
+            // b[j * p + col] += a[jj] * c[row * p + col]; BUG!
         }
     }
 }
@@ -173,6 +174,36 @@ void SparseMatmul::backward()
     timer_stop(TMR_SPMATMUL_BW);
 }
 
+// serial version
+/*
+void SparseMatmul::backward()
+{
+    timer_start(TMR_SPMATMUL_BW);
+    std::vector<real> my_a(a->size);
+    std::vector<real> my_c_grad(c->size);
+    std::vector<real> my_b_grad(b->size, 0.f);
+    std::vector<natural> my_indptr(sp->indptr_size);
+    std::vector<natural> my_indices(sp->indices_size);
+    a->dev_data.copy_to_host(my_a.data());
+    c->dev_grad.copy_to_host(my_c_grad.data());
+
+    sp->dev_indptr.copy_to_host(my_indptr.data());
+    sp->dev_indices.copy_to_host(my_indices.data());
+
+    b->zero_grad();
+    int row = 0;
+    for (int i = 0; i < my_indptr.size() - 1; i++)
+        for (int k = 0; k < p; k++)
+            for (int jj = my_indptr[i]; jj < my_indptr[i + 1]; jj++)
+            {
+                int j = my_indices[jj];
+
+                my_b_grad[j * p + k] += my_c_grad[i * p + k] * my_a[jj];
+            }
+    b->dev_grad.copy_to_device(my_b_grad.data());
+    timer_stop(TMR_SPMATMUL_BW);
+}
+*/
 /*
 __global__ void cuda_SparseMatmul_backward_kernel(float *a_in, float *b_in, float *c_in, natural *indptr, natural *indices, int p)
 {
