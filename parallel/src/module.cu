@@ -55,7 +55,7 @@ __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, randState
     }
 }
 
-void Dropout::forward(bool training)
+void Dropout::forward(bool training) const
 {
     if (!training)
         return;
@@ -82,7 +82,7 @@ __global__ void dropout_kernel_backward(real *dev_grad, const bool *mask, const 
     }
 }
 
-void Dropout::backward()
+void Dropout::backward() const
 {
     if (!dev_mask.get())
         return;
@@ -127,7 +127,7 @@ __global__ void sparse_matmul_kernel_forward(const real *a, const real *b, real 
     }
 }
 
-void SparseMatmul::forward(bool training)
+void SparseMatmul::forward(bool training) const
 {
     timer_start(TMR_SPMATMUL_FW);
 
@@ -161,7 +161,7 @@ __global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real
     }
 }
 
-void SparseMatmul::backward()
+void SparseMatmul::backward() const
 {
     timer_start(TMR_SPMATMUL_BW);
 
@@ -176,7 +176,7 @@ void SparseMatmul::backward()
 
 // serial version
 /*
-void SparseMatmul::backward()
+void SparseMatmul::backward() const
 {
     timer_start(TMR_SPMATMUL_BW);
     std::vector<real> my_a(a->size);
@@ -218,7 +218,7 @@ __global__ void cuda_SparseMatmul_backward_kernel(float *a_in, float *b_in, floa
     }
 }
 
-void SparseMatmul::backward()
+void SparseMatmul::backward() const
 {
     timer_start(TMR_SPMATMUL_BW);
 
@@ -265,7 +265,7 @@ __global__ void graphsum_kernel(const real *dev_graph_value, const real *dev_in,
     }
 }
 
-void GraphSum::forward(bool training)
+void GraphSum::forward(bool training) const
 {
 
     timer_start(TMR_GRAPHSUM_FW);
@@ -281,7 +281,7 @@ void GraphSum::forward(bool training)
 
 // ###############################################################################
 
-void GraphSum::backward()
+void GraphSum::backward() const
 {
     timer_start(TMR_GRAPHSUM_BW);
 
@@ -318,7 +318,7 @@ __global__ void relu_kernel_forward(real *dev_data, bool *dev_mask, const natura
     }
 }
 
-void ReLU::forward(bool training)
+void ReLU::forward(bool training) const
 {
     timer_start(TMR_RELU_FW);
 
@@ -343,7 +343,7 @@ __global__ void relu_kernel_backward(real *d_in_grad, const bool *d_mask, const 
     }
 }
 
-void ReLU::backward()
+void ReLU::backward() const
 {
     timer_start(TMR_RELU_BW);
 
@@ -408,7 +408,7 @@ __global__ void matmul_kernel(const real *a, const real *b, real *c, const natur
         c[row * p + col] = res;
 }
 
-void Matmul::forward(bool training)
+void Matmul::forward(bool training) const
 {
     timer_start(TMR_MATMUL_FW);
     // c->zero();
@@ -472,7 +472,7 @@ __global__ void matmul_kernel_forward(const real *a, const real *b, real *c, con
     }
 }
 
-void Matmul::forward(bool training)
+void Matmul::forward(bool training) const
 {
     timer_start(TMR_MATMUL_FW);
     // c->zero();
@@ -543,7 +543,7 @@ __global__ void matmul_kernel_backward_1(real *a_grad, real *b_grad, const real 
     }
 }
 
-void Matmul::backward()
+void Matmul::backward() const
 {
     timer_start(TMR_MATMUL_BW);
 
@@ -613,7 +613,7 @@ __global__ void matmul_kernel_backward_1(real *a, const real *b, const real *c, 
             a[row * n + col] = res;
     }
 }
-
+/*
 __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
 {
     // shared memory arrays that are used as tiles to store a portion of matrices A and B.
@@ -650,12 +650,12 @@ __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, 
         b[row * p + col] = res;
 }
 
-void Matmul::backward()
+void Matmul::backward() const
 {
     timer_start(TMR_MATMUL_BW);
 
     // b->zero_grad();
-    // a->zero_grad();
+    //  a->zero_grad();
     const natural n_blocks_y_1 = std::min(CEIL(m, TILE_DIM), static_cast<natural>(N_BLOCKS));
     dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
     dim3 n_blocks_2(CEIL(p, TILE_DIM), CEIL(n, TILE_DIM));
@@ -663,6 +663,48 @@ void Matmul::backward()
     matmul_kernel_backward_1<<<n_blocks_1, n_threads>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
     CHECK_CUDA_ERROR(cudaGetLastError());
     matmul_kernel_backward_2<<<n_blocks_2, n_threads>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
+    CHECK_CUDA_ERROR(cudaGetLastError());
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+
+    timer_stop(TMR_MATMUL_BW);
+}
+*/
+
+__global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
+{
+    natural id = blockIdx.x * blockDim.x + threadIdx.x;
+    extern __shared__ real s_mem[];
+#pragma unroll
+    for (natural i = id; i < m * p; i += blockDim.x * gridDim.x)
+    {
+        natural row = i / p;
+        natural col = i % p;
+        // i = row * p + col
+        const real c_val = c[i];
+#pragma unroll
+        for (natural j = 0; j < n; j++)
+        {
+            atomicAdd(&b[j * p + col], c_val * a[row * n + j]);
+            // atomicAdd(&b[j * p + col], c[row * p + col] * a[row * n + j]);
+            //  b[j * p + col] += c[row * p + col] * a[row * n + j];
+        }
+    }
+}
+
+void Matmul::backward() const
+{
+    timer_start(TMR_MATMUL_BW);
+
+    b->zero_grad();
+    // a->zero_grad();
+    const natural n_blocks_y_1 = std::min(CEIL(m, TILE_DIM), static_cast<natural>(N_BLOCKS));
+    dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
+    const natural n_blocks_y_2 = std::min(CEIL(m * p, TILE_DIM), static_cast<natural>(N_BLOCKS));
+    dim3 n_blocks_2(n_blocks_y_2);
+    dim3 n_threads(TILE_DIM, TILE_DIM);
+    matmul_kernel_backward_1<<<n_blocks_1, n_threads>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
+    CHECK_CUDA_ERROR(cudaGetLastError());
+    matmul_kernel_backward_2<<<n_blocks_2, N_THREADS, n>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
     CHECK_CUDA_ERROR(cudaGetLastError());
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
@@ -715,7 +757,7 @@ __global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const 
     }
 }
 
-void CrossEntropyLoss::forward(bool training)
+void CrossEntropyLoss::forward(bool training) const
 {
 
     timer_start(TMR_LOSS_FW);
@@ -756,7 +798,7 @@ void CrossEntropyLoss::forward(bool training)
     timer_stop(TMR_LOSS_FW);
 }
 
-void CrossEntropyLoss::backward()
+void CrossEntropyLoss::backward() const
 {
 }
 
