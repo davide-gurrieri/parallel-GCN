@@ -1,6 +1,17 @@
+#-------------------------------------------------
+# Parameters for GCN
+#-------------------------------------------------
 hidden_dim = 16
 dropout = 0.5
+epochs = 100
+early_stopping = 0
+
+#-------------------------------------------------
+# Parameters for Adam
+#-------------------------------------------------
 learning_rate = 0.01
 weight_decay = 5e-4
-epochs = 100
-params.early_stopping = 0
+beta1 = 0.9
+beta2 = 0.999
+eps = 1e-8
+

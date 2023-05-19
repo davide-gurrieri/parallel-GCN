@@ -13,8 +13,7 @@ using std::shared_ptr;
 
 struct AdamParams
 {
-    real lr, beta1, beta2, eps, weight_decay;
-    static AdamParams get_default();
+    real learning_rate{0.01}, beta1{0.9}, beta2{0.999}, eps{1e-8}, weight_decay{5e-4};
 };
 
 // ##################################################################################

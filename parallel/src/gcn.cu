@@ -1,18 +1,18 @@
 #include "../include/gcn.cuh"
 
-// #include "../include/rand.h"
-// #include "../include/timer.h"
-
 // ##################################################################################
 
 void GCNParams::print_info() const
 {
-    std::cout << "num_nodes: " << num_nodes << std::endl;
-    std::cout << "train_dim: " << train_dim << std::endl;
-    std::cout << "val_dim: " << val_dim << std::endl;
-    std::cout << "test_dim: " << test_dim << std::endl;
-    std::cout << "input_dim: " << input_dim << std::endl;
-    std::cout << "output_dim: " << output_dim << std::endl;
+    std::cout << std::endl;
+    std::cout << "PARSED PARAMETERS:" << std::endl;
+    std::cout << "Number of nodes: " << num_nodes << std::endl;
+    std::cout << "Number of features: " << input_dim << std::endl;
+    std::cout << "Number of labels: " << output_dim << std::endl;
+    std::cout << "Training dataset dimension: " << train_dim << std::endl;
+    std::cout << "Validation dataset dimension: " << val_dim << std::endl;
+    std::cout << "Test dataset dimension: " << test_dim << std::endl;
+    std::cout << std::endl;
 }
 
 DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex(gcn_data.graph)), dev_feature_index(DevSparseIndex(gcn_data.feature_index))
@@ -32,11 +32,11 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex
 
 // ##################################################################################
 
-GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev_data{DevGCNData(*data_)}
+GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_) : params(params_), adam_params(adam_params_), data(data_), dev_data{DevGCNData(*data_)}
 {
     initialize_random();
     initialize_truth();
-    dev_wrong = dev_shared_ptr<natural>(1);
+    dev_wrong = dev_shared_ptr<natural>(1); // used by get_accuracy()
 
     modules.reserve(8);
     variables.reserve(7);
@@ -55,8 +55,8 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
     variables.push_back(std::make_shared<Variable>(params->input_dim * params->hidden_dim, true, dev_rand_states));
     shared_ptr<Variable> layer1_weight = variables.back();
     layer1_weight->glorot(params->input_dim, params->hidden_dim);
-    dev_l2_weight1 = dev_shared_ptr<real>(layer1_weight->size);
-    dev_l2 = dev_shared_ptr<real>(1);
+    dev_l2_weight1 = dev_shared_ptr<real>(layer1_weight->size); // used by get_l2_penalty()
+    dev_l2 = dev_shared_ptr<real>(1);                           // used by get_l2_penalty()
 
     modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dim));
 
@@ -91,11 +91,7 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
     modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_truth, &loss, params->output_dim));
 
     // optimizer
-    AdamParams adam_params = AdamParams::get_default();
-    adam_params.lr = params->learning_rate;
-    adam_params.weight_decay = params->weight_decay;
-
-    optimizer = Adam({{layer1_weight, true}, {layer2_weight, false}}, adam_params);
+    optimizer = Adam({{layer1_weight, true}, {layer2_weight, false}}, *adam_params);
 }
 
 // ##################################################################################
@@ -133,7 +129,7 @@ __global__ void set_input_kernel(real *dev_data, real *dev_feature_value, natura
     }
 }
 
-void GCN::set_input()
+void GCN::set_input() const
 {
     const natural n_blocks = std::min(CEIL(input->size, N_THREADS), static_cast<natural>(N_BLOCKS));
     set_input_kernel<<<n_blocks, N_THREADS>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
@@ -151,7 +147,7 @@ __global__ void set_truth_kernel(integer *dev_truth, const natural *dev_split, c
         dev_truth[i] = dev_split[i] == current_split ? dev_label[i] : -1;
 }
 
-void GCN::set_truth(natural current_split)
+void GCN::set_truth(const natural current_split) const
 {
     if (current_split == 1)
         modules.back()->set_num_samples(params->train_dim);
@@ -180,7 +176,7 @@ __global__ void get_l2_penalty_kernel(real *dev_l2_weight, const real *weight, c
     }
 }
 
-real GCN::get_l2_penalty()
+real GCN::get_l2_penalty() const
 {
     dev_l2.set_zero();
     const auto &weights = variables[2];
@@ -192,12 +188,12 @@ real GCN::get_l2_penalty()
     reduce<<<n_blocks, N_THREADS>>>(dev_l2_weight1.get(), dev_l2.get(), weights->size);
     real l2{0};
     dev_l2.copy_to_host(&l2);
-    return params->weight_decay * l2 / 2;
+    return adam_params->weight_decay * l2 / 2;
 }
 
 // ##################################################################################
 
-std::pair<real, real> GCN::eval(natural current_split)
+std::pair<real, real> GCN::eval(const natural current_split) const
 {
     set_input();
     set_truth(current_split);
@@ -225,7 +221,7 @@ __global__ void get_accuracy_kernel(const integer *dev_truth, const real *dev_da
     }
 }
 
-real GCN::get_accuracy()
+real GCN::get_accuracy() const
 {
     dev_wrong.set_zero();
     const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), static_cast<natural>(N_BLOCKS));

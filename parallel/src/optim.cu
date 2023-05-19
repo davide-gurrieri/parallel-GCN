@@ -2,8 +2,6 @@
 // #include <cmath>
 // #include <cstdlib>
 
-AdamParams AdamParams::get_default() { return {0.001, 0.9, 0.999, 1e-8, 0.0}; }
-
 // ##################################################################################
 
 AdamVariable::AdamVariable(shared_ptr<Variable> var, bool decay_) : dev_data(var->dev_data), dev_grad(var->dev_grad), size(var->size), decay(decay_)
@@ -52,7 +50,7 @@ void Adam::step()
     timer_start(TMR_OPTIMIZER);
 
     step_count++;
-    const real step_size = params.lr * sqrtf(1 - powf(params.beta2, step_count)) / (1 - powf(params.beta1, step_count));
+    const real step_size = params.learning_rate * sqrtf(1 - powf(params.beta2, step_count)) / (1 - powf(params.beta1, step_count));
 
     for (const auto &var : vars)
     {
