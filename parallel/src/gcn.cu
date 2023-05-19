@@ -100,16 +100,16 @@ GCN::GCN(GCNParams *params_, GCNData *data_) : params(params_), data(data_), dev
 
 // ##################################################################################
 
-__global__ void initialize_random_kernel(randState *dev_rand_states, natural seed)
+__global__ void initialize_random_kernel(randState *dev_rand_states)
 {
     // curand_init(seed, index, offset, &state);
-    curand_init(seed + threadIdx.x * seed, threadIdx.x, 0, &dev_rand_states[threadIdx.x]);
+    curand_init(SEED, threadIdx.x, 0, &dev_rand_states[threadIdx.x]);
 }
 
 void GCN::initialize_random()
 {
     dev_rand_states = dev_shared_ptr<randState>(N_THREADS);
-    initialize_random_kernel<<<1, N_THREADS>>>(dev_rand_states.get(), time(NULL));
+    initialize_random_kernel<<<1, N_THREADS>>>(dev_rand_states.get());
     CHECK_CUDA_ERROR(cudaGetLastError());
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 }
