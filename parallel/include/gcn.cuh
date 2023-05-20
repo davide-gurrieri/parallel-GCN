@@ -8,6 +8,7 @@
 #include "../include/utils.cuh"
 #include "../include/variable.cuh"
 #include "../include/reduction.cuh"
+#include "../include/smart_object.cuh"
 
 // #include <cuda_runtime.h>
 #include <utility> // for std::pair
@@ -80,6 +81,8 @@ class GCN
   std::pair<real, real> eval(const natural current_split) const;
 
 public:
+  // std::vector<smart_object<cudaStream_t>> streams;
+  // std::vector<smart_object<cudaStream_t>> events;
   real loss;
   const GCNParams *params;
   const AdamParams *adam_params;

@@ -34,6 +34,7 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex
 
 GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_) : params(params_), adam_params(adam_params_), data(data_), dev_data{DevGCNData(*data_)}
 {
+    streams.emplace_back();
     initialize_random();
     initialize_truth();
     dev_wrong = dev_shared_ptr<natural>(1); // used by get_accuracy()
@@ -104,7 +105,7 @@ __global__ void initialize_random_kernel(randState *dev_rand_states)
 void GCN::initialize_random()
 {
     dev_rand_states = dev_shared_ptr<randState>(N_THREADS);
-    initialize_random_kernel<<<1, N_THREADS>>>(dev_rand_states.get());
+    initialize_random_kernel<<<1, N_THREADS, 0, streams[0].get()>>>(dev_rand_states.get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -133,7 +134,7 @@ __global__ void set_input_kernel(real *dev_data, const real *dev_feature_value, 
 void GCN::set_input() const
 {
     const natural n_blocks = std::min(CEIL(input->size, N_THREADS), N_BLOCKS);
-    set_input_kernel<<<n_blocks, N_THREADS>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
+    set_input_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -160,7 +161,7 @@ void GCN::set_truth(const natural current_split) const
         modules.back()->set_num_samples(params->test_dim);
 
     const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), N_BLOCKS);
-    set_truth_kernel<<<n_blocks, N_THREADS>>>(dev_truth.get(), dev_data.dev_split.get(), dev_data.dev_label.get(), params->num_nodes, current_split);
+    set_truth_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_truth.get(), dev_data.dev_split.get(), dev_data.dev_label.get(), params->num_nodes, current_split);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -189,7 +190,7 @@ real GCN::get_l2_penalty() const
     dev_l2.set_zero();
     const auto &weights = variables[2];
     const natural n_blocks = std::min(CEIL(weights->size, N_THREADS), N_BLOCKS);
-    get_l2_penalty_kernel<<<n_blocks, N_THREADS>>>(dev_l2.get(), weights->dev_data.get(), weights->size);
+    get_l2_penalty_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_l2.get(), weights->dev_data.get(), weights->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -233,7 +234,7 @@ real GCN::get_accuracy() const
 {
     dev_wrong.set_zero();
     const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), N_BLOCKS);
-    get_accuracy_kernel<<<n_blocks, N_THREADS>>>(dev_truth.get(), output->dev_data.get(), dev_wrong.get(), params->num_nodes, params->output_dim);
+    get_accuracy_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_truth.get(), output->dev_data.get(), dev_wrong.get(), params->num_nodes, params->output_dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif

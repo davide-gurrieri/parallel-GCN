@@ -67,4 +67,7 @@ void smart_object<cudaStream_t>::DecrementRefCount();
 template <>
 void smart_object<cudaEvent_t>::DecrementRefCount();
 
+inline std::vector<smart_object<cudaStream_t>> streams;
+inline std::vector<smart_object<cudaEvent_t>> events;
+
 #endif

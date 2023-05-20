@@ -13,6 +13,7 @@ using std::unique_ptr;
 #include "../include/sparse.cuh"
 #include "../include/shared_ptr.cuh"
 #include "../include/reduction.cuh" // for CrossEntropyLoss
+#include "../include/smart_object.cuh"
 
 // ##################################################################################
 

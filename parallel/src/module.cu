@@ -65,7 +65,7 @@ void Dropout::forward(bool training) const
     timer_start(TMR_DROPOUT_FW);
     const real scale = 1.0 / (1.0 - p);
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS_DROPOUT), N_BLOCKS);
-    dropout_kernel_forward<<<n_blocks, N_THREADS_DROPOUT>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
+    dropout_kernel_forward<<<n_blocks, N_THREADS_DROPOUT, 0, streams[0].get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -93,7 +93,7 @@ void Dropout::backward() const
     timer_start(TMR_DROPOUT_BW);
     const real scale = 1.0 / (1.0 - p);
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    dropout_kernel_backward<<<n_blocks, N_THREADS>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
+    dropout_kernel_backward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -129,7 +129,7 @@ void SparseMatmul::forward(bool training) const
     timer_start(TMR_SPMATMUL_FW);
 
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
-    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
+    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -164,7 +164,7 @@ void SparseMatmul::backward() const
 
     b->zero_grad();
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
-    sparse_matmul_kernel_backward<<<n_blocks, N_THREADS>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
+    sparse_matmul_kernel_backward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -207,8 +207,8 @@ void GraphSum::forward(bool training) const
 
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
-    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
-    // graphsum_kernel<<<n_blocks, N_THREADS>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    // graphsum_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -225,7 +225,7 @@ void GraphSum::backward() const
 
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
-    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -263,7 +263,7 @@ void ReLU::forward(bool training) const
     timer_start(TMR_RELU_FW);
 
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    relu_kernel_forward<<<n_blocks, N_THREADS>>>(in->dev_data.get(), dev_mask.get(), in->size, training);
+    relu_kernel_forward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(in->dev_data.get(), dev_mask.get(), in->size, training);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -290,7 +290,7 @@ void ReLU::backward() const
     timer_start(TMR_RELU_BW);
 
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    relu_kernel_backward<<<n_blocks, N_THREADS>>>(in->dev_grad.get(), dev_mask.get(), in->size);
+    relu_kernel_backward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -361,7 +361,7 @@ void Matmul::forward(bool training) const
     const natural n_blocks_y = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
     const dim3 n_blocks(CEIL(p, TILE_DIM), n_blocks_y);
     const dim3 n_threads(TILE_DIM, TILE_DIM);
-    matmul_kernel_forward<<<n_blocks, n_threads>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), m, n, p);
+    matmul_kernel_forward<<<n_blocks, n_threads, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -467,11 +467,11 @@ void Matmul::backward() const
     dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
     dim3 n_blocks_2(CEIL(p, TILE_DIM), CEIL(n, TILE_DIM));
     dim3 n_threads(TILE_DIM, TILE_DIM);
-    matmul_kernel_backward_1<<<n_blocks_1, n_threads>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
+    matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, streams[0].get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
     #ifdef DEBUG_CUDA
 CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    matmul_kernel_backward_2<<<n_blocks_2, n_threads>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
+    matmul_kernel_backward_2<<<n_blocks_2, n_threads, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
     #ifdef DEBUG_CUDA
 CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -506,13 +506,13 @@ void Matmul::backward() const
     const natural n_blocks_y_1 = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
     const dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
     const dim3 n_threads(TILE_DIM, TILE_DIM);
-    matmul_kernel_backward_1<<<n_blocks_1, n_threads>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
+    matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, streams[0].get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
 
     const natural n_blocks_2 = std::min(CEIL(m * p, TILE_DIM), N_BLOCKS);
-    matmul_kernel_backward_2<<<n_blocks_2, N_THREADS>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
+    matmul_kernel_backward_2<<<n_blocks_2, N_THREADS, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -613,14 +613,14 @@ void CrossEntropyLoss::forward(bool training) const
     dev_loss.set_zero();
     const natural DIM = logits->size / num_classes;
     const natural n_blocks = std::min(CEIL(DIM, N_THREADS), N_BLOCKS);
-    cross_entropy_loss_kernel<<<n_blocks, N_THREADS>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss.get(), num_classes, DIM, num_samples, training);
+    cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss.get(), num_classes, DIM, num_samples, training);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
     cudaDeviceSynchronize();
 
     dev_loss_res.set_zero();
-    reduce<<<n_blocks, N_THREADS>>>(dev_loss.get(), dev_loss_res.get(), DIM);
+    reduce<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_loss.get(), dev_loss_res.get(), DIM);
     cudaDeviceSynchronize();
     dev_loss_res.copy_to_host(loss);
     *loss /= num_samples;
@@ -683,7 +683,7 @@ void CrossEntropyLoss::forward(bool training) const
     dev_loss_res.set_zero();
     const natural DIM = logits->size / num_classes;
     const natural n_blocks = std::min(CEIL(DIM, N_THREADS), N_BLOCKS);
-    cross_entropy_loss_kernel<<<n_blocks, N_THREADS>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss_res.get(), num_classes, DIM, num_samples, training);
+    cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss_res.get(), num_classes, DIM, num_samples, training);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
