@@ -1,25 +1,21 @@
 #include "../include/sparse.cuh"
 
+// ##################################################################################
+
 void SparseIndex::print()
 {
     std::cout << "---sparse index info--" << std::endl;
-
     std::cout << "indptr: ";
     for (auto i : indptr)
-    {
         std::cout << i << " ";
-    }
     std::cout << std::endl;
-
     std::cout << "indices: ";
     for (auto i : indices)
-    {
         std::cout << i << " ";
-    }
     std::cout << std::endl;
 }
 
-// DevSparseIndex::DevSparseIndex() : dev_indices(nullptr), dev_indptr(nullptr), indices_size(0), indptr_size(0) {}
+// ##################################################################################
 
 DevSparseIndex::DevSparseIndex(const SparseIndex &sparse_index)
 {
@@ -32,3 +28,5 @@ DevSparseIndex::DevSparseIndex(const SparseIndex &sparse_index)
     dev_indices.copy_to_device(sparse_index.indices.data());
     dev_indptr.copy_to_device(sparse_index.indptr.data());
 }
+
+// ##################################################################################

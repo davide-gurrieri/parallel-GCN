@@ -5,6 +5,8 @@
 using std::shared_ptr;
 using std::unique_ptr;
 
+// #include <cuda_runtime.h>
+
 #include "../include/utils.cuh"
 #include "../include/variable.cuh"
 #include "../include/timer.h"
@@ -17,8 +19,8 @@ using std::unique_ptr;
 class Module
 {
 public:
-    virtual void forward(bool) = 0;
-    virtual void backward() = 0;
+    virtual void forward(bool) const = 0;
+    virtual void backward() const = 0;
     virtual void set_num_samples(natural){};
     virtual natural get_num_samples() const { return 0; };
     virtual ~Module(){};
@@ -35,8 +37,8 @@ class Dropout : public Module
 
 public:
     Dropout(shared_ptr<Variable> in_, real p_, dev_shared_ptr<randState> dev_rand_states_);
-    void forward(bool);
-    void backward();
+    void forward(bool) const;
+    void backward() const;
 };
 
 // ##################################################################################
@@ -56,8 +58,8 @@ public:
                  natural n_,
                  natural p_);
     ~SparseMatmul(){};
-    void forward(bool);
-    void backward();
+    void forward(bool) const;
+    void backward() const;
 };
 
 // ##################################################################################
@@ -72,8 +74,8 @@ class GraphSum : public Module
 public:
     GraphSum(shared_ptr<Variable> in_, shared_ptr<Variable> out_, DevSparseIndex *graph_, dev_shared_ptr<real> dev_graph_value_, natural dim_);
     ~GraphSum() {}
-    void forward(bool);
-    void backward();
+    void forward(bool) const;
+    void backward() const;
 };
 
 // ##################################################################################
@@ -85,8 +87,8 @@ class ReLU : public Module
 
 public:
     ReLU(shared_ptr<Variable> in_);
-    void forward(bool);
-    void backward();
+    void forward(bool) const;
+    void backward() const;
 };
 
 // ##################################################################################
@@ -104,8 +106,8 @@ public:
            natural n_,
            natural p_);
     ~Matmul() {}
-    void forward(bool);
-    void backward();
+    void forward(bool) const;
+    void backward() const;
 };
 
 // ##################################################################################
@@ -125,8 +127,8 @@ public:
     ~CrossEntropyLoss(){};
     void set_num_samples(natural num_samples_);
     natural get_num_samples() const;
-    void forward(bool);
-    void backward();
+    void forward(bool) const;
+    void backward() const;
 };
 
 // ##################################################################################

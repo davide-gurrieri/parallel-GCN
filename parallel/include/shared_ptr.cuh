@@ -14,11 +14,19 @@ public:
     // Constructor that allocates device memory using cudaMalloc
     explicit dev_shared_ptr(size_t n_elements_)
     {
+#ifdef DEBUG_CUDA
         CHECK_CUDA_ERROR(cudaMalloc(&ptr, n_elements_ * sizeof(T)));
+#else
+        cudaMalloc(&ptr, n_elements_ * sizeof(T));
+#endif
         refCount = new int(1);
         n_elements = n_elements_;
+#ifdef DEBUG_CUDA
         CHECK_CUDA_ERROR(cudaMemset(ptr, 0, n_elements * sizeof(T)));
-        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+#else
+        cudaMemset(ptr, 0, n_elements * sizeof(T));
+#endif
+        cudaDeviceSynchronize();
     }
 
     // Copy constructor
@@ -103,18 +111,30 @@ public:
 
     void copy_to_device(const T *source) const
     {
+#ifdef DEBUG_CUDA
         CHECK_CUDA_ERROR(cudaMemcpy(ptr, source, n_elements * sizeof(T), cudaMemcpyHostToDevice));
+#else
+        cudaMemcpy(ptr, source, n_elements * sizeof(T), cudaMemcpyHostToDevice);
+#endif
     }
 
     void copy_to_host(T *destination) const
     {
+#ifdef DEBUG_CUDA
         CHECK_CUDA_ERROR(cudaMemcpy(destination, ptr, n_elements * sizeof(T), cudaMemcpyDeviceToHost));
+#else
+        cudaMemcpy(destination, ptr, n_elements * sizeof(T), cudaMemcpyDeviceToHost);
+#endif
     }
 
     void set_zero() const
     {
+#ifdef DEBUG_CUDA
         CHECK_CUDA_ERROR(cudaMemset(ptr, 0, n_elements * sizeof(T)));
-        CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+#else
+        cudaMemset(ptr, 0, n_elements * sizeof(T));
+#endif
+        cudaDeviceSynchronize();
     }
 
     int get_n_elements() const
@@ -147,7 +167,11 @@ private:
             (*refCount)--;
             if (*refCount == 0)
             {
+#ifdef DEBUG_CUDA
                 CHECK_CUDA_ERROR(cudaFree(ptr));
+#else
+                cudaFree(ptr);
+#endif
                 delete refCount;
             }
         }

@@ -2,7 +2,7 @@
 
 // ##################################################################################
 
-Variable::Variable(natural size_, bool requires_grad, dev_shared_ptr<randState> dev_rand_states_) : size(size_)
+Variable::Variable(const natural size_, const bool requires_grad, const dev_shared_ptr<randState> dev_rand_states_) : size(size_)
 {
     dev_data = dev_shared_ptr<real>(size);
     if (requires_grad)
@@ -11,52 +11,43 @@ Variable::Variable(natural size_, bool requires_grad, dev_shared_ptr<randState> 
         dev_grad = dev_shared_ptr<real>();
 
     if (dev_rand_states_.get())
-    {
         dev_rand_states = dev_rand_states_;
-    }
     else
-    {
         dev_rand_states = dev_shared_ptr<randState>();
-    }
 
-    std::cout << "Variable created with size " << size << std::endl;
+    // std::cout << "Variable created with size " << size << std::endl;
 }
 
 // ##################################################################################
 
-__global__ void glorot_kernel(real *data, natural size, real scale, randState *state)
+__global__ void glorot_kernel(real *data, const natural size, const real scale, randState *state)
 {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < size)
+    natural id = blockIdx.x * blockDim.x + threadIdx.x;
+#pragma unroll
+    for (natural i = id; i < size; i += blockDim.x * gridDim.x)
         data[i] = (curand_uniform(&state[i % N_THREADS]) - 0.5) * scale;
 }
 
-void Variable::glorot(natural in_size, natural out_size)
+void Variable::glorot(const natural in_size, const natural out_size) const
 {
-    real range = sqrtf(6.0f / (in_size + out_size));
-    real scale = range * 2;
-    dim3 n_blocks(CEIL(size, N_THREADS));
-    dim3 n_threads(N_THREADS);
-    glorot_kernel<<<n_blocks, n_threads>>>(dev_data.get(), size, scale, dev_rand_states.get());
+    const real range = sqrtf(6.0f / (in_size + out_size));
+    const real scale = range * 2;
+    const natural n_blocks = std::min(CEIL(size, N_THREADS), N_BLOCKS);
+    glorot_kernel<<<n_blocks, N_THREADS>>>(dev_data.get(), size, scale, dev_rand_states.get());
+#ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
+#endif
+    cudaDeviceSynchronize();
 }
 
 // ##################################################################################
-/*
-__global__ void zero_kernel(real *data, natural size)
-{
-    natural i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < size)
-        data[i] = static_cast<real>(0.);
-}
-*/
 
-void Variable::zero()
+void Variable::zero() const
 {
     dev_data.set_zero();
 }
 
-void Variable::zero_grad()
+void Variable::zero_grad() const
 {
     dev_grad.set_zero();
 }

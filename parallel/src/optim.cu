@@ -8,12 +8,12 @@ AdamVariable::AdamVariable(shared_ptr<Variable> var, bool decay_) : dev_data(var
 {
     dev_m = dev_shared_ptr<real>(size);
     dev_v = dev_shared_ptr<real>(size);
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+    cudaDeviceSynchronize();
 }
 
 // ##################################################################################
 
-Adam::Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, AdamParams params_) : params(params_), step_count(0)
+Adam::Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, AdamParams const *params_) : params(params_), step_count(0)
 {
     for (const auto &v : vars_)
         vars.emplace_back(v.first, v.second);
@@ -22,10 +22,10 @@ Adam::Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, Adam
     beta1 = dev_shared_ptr<real>(1);
     beta2 = dev_shared_ptr<real>(1);
     eps = dev_shared_ptr<real>(1);
-    weight_decay.copy_to_device(&(params.weight_decay));
-    beta1.copy_to_device(&(params.beta1));
-    beta2.copy_to_device(&(params.beta2));
-    eps.copy_to_device(&(params.eps));
+    weight_decay.copy_to_device(&(params->weight_decay));
+    beta1.copy_to_device(&(params->beta1));
+    beta2.copy_to_device(&(params->beta2));
+    eps.copy_to_device(&(params->eps));
 }
 
 // ##################################################################################
@@ -50,16 +50,17 @@ void Adam::step()
     timer_start(TMR_OPTIMIZER);
 
     step_count++;
-    const real step_size = params.learning_rate * sqrtf(1 - powf(params.beta2, step_count)) / (1 - powf(params.beta1, step_count));
+    const real step_size = params->learning_rate * sqrtf(1 - powf(params->beta2, step_count)) / (1 - powf(params->beta1, step_count));
 
     for (const auto &var : vars)
     {
-        // std::cout << "Adam: " << var.decay << std::endl;
         const natural n_blocks = std::min(CEIL(var.size, N_THREADS), static_cast<natural>(N_BLOCKS));
         adam_step_kernel<<<n_blocks, N_THREADS>>>(var.dev_data.get(), var.dev_grad.get(), var.dev_m.get(), var.dev_v.get(), var.size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), var.decay, step_size);
+#ifdef DEBUG_CUDA
         CHECK_CUDA_ERROR(cudaGetLastError());
+#endif
     }
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+    cudaDeviceSynchronize();
 
     timer_stop(TMR_OPTIMIZER);
 }

@@ -31,14 +31,14 @@ public:
 
 class Adam
 {
-    AdamParams params;
+    const AdamParams *params;
     dev_shared_ptr<real> weight_decay, beta1, beta2, eps;
     natural step_count;
     std::vector<AdamVariable> vars;
 
 public:
     Adam() {}
-    Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, AdamParams params_);
+    Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, AdamParams const *params_);
     void step();
 };
 

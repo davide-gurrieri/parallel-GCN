@@ -55,8 +55,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     variables.push_back(std::make_shared<Variable>(params->input_dim * params->hidden_dim, true, dev_rand_states));
     shared_ptr<Variable> layer1_weight = variables.back();
     layer1_weight->glorot(params->input_dim, params->hidden_dim);
-    dev_l2_weight1 = dev_shared_ptr<real>(layer1_weight->size); // used by get_l2_penalty()
-    dev_l2 = dev_shared_ptr<real>(1);                           // used by get_l2_penalty()
+    dev_l2 = dev_shared_ptr<real>(1); // used by get_l2_penalty()
 
     modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dim));
 
@@ -91,7 +90,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_truth, &loss, params->output_dim));
 
     // optimizer
-    optimizer = Adam({{layer1_weight, true}, {layer2_weight, false}}, *adam_params);
+    optimizer = Adam({{layer1_weight, true}, {layer2_weight, false}}, adam_params);
 }
 
 // ##################################################################################
@@ -99,15 +98,17 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
 __global__ void initialize_random_kernel(randState *dev_rand_states)
 {
     // curand_init(seed, index, offset, &state);
-    curand_init(SEED, threadIdx.x, 0, &dev_rand_states[threadIdx.x]);
+    curand_init(SEED, 0, threadIdx.x, &dev_rand_states[threadIdx.x]);
 }
 
 void GCN::initialize_random()
 {
     dev_rand_states = dev_shared_ptr<randState>(N_THREADS);
     initialize_random_kernel<<<1, N_THREADS>>>(dev_rand_states.get());
+#ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+#endif
+    cudaDeviceSynchronize();
 }
 
 // ##################################################################################
@@ -119,7 +120,7 @@ void GCN::initialize_truth()
 
 // ##################################################################################
 
-__global__ void set_input_kernel(real *dev_data, real *dev_feature_value, natural size)
+__global__ void set_input_kernel(real *dev_data, const real *dev_feature_value, const natural size)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
@@ -131,15 +132,17 @@ __global__ void set_input_kernel(real *dev_data, real *dev_feature_value, natura
 
 void GCN::set_input() const
 {
-    const natural n_blocks = std::min(CEIL(input->size, N_THREADS), static_cast<natural>(N_BLOCKS));
+    const natural n_blocks = std::min(CEIL(input->size, N_THREADS), N_BLOCKS);
     set_input_kernel<<<n_blocks, N_THREADS>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
+#ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+#endif
+    cudaDeviceSynchronize();
 }
 
 // ##################################################################################
 
-__global__ void set_truth_kernel(integer *dev_truth, const natural *dev_split, const integer *dev_label, natural size, natural current_split)
+__global__ void set_truth_kernel(integer *dev_truth, const natural *dev_split, const integer *dev_label, const natural size, const natural current_split)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
@@ -156,36 +159,41 @@ void GCN::set_truth(const natural current_split) const
     else if (current_split == 3)
         modules.back()->set_num_samples(params->test_dim);
 
-    const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), static_cast<natural>(N_BLOCKS));
+    const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), N_BLOCKS);
     set_truth_kernel<<<n_blocks, N_THREADS>>>(dev_truth.get(), dev_data.dev_split.get(), dev_data.dev_label.get(), params->num_nodes, current_split);
-
+#ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-    // print_gpu<int>(dev_truth, params->num_nodes, params->num_nodes);
+#endif
+    cudaDeviceSynchronize();
 }
 
 // ##################################################################################
 
-__global__ void get_l2_penalty_kernel(real *dev_l2_weight, const real *weight, const natural size)
+__global__ void get_l2_penalty_kernel(real *dev_l2, const real *weight, const natural size)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
+    const natural warp_size = 32;
+    real sum = static_cast<real>(0); // Initialize partial sum for this thread;
 #pragma unroll
     for (natural i = id; i < size; i += blockDim.x * gridDim.x)
     {
-        dev_l2_weight[i] = weight[i] * weight[i];
+        sum += weight[i] * weight[i];
     }
+    sum = warp_reduce(sum);
+    if ((threadIdx.x & (warp_size - 1)) == 0)
+        atomicAdd(dev_l2, sum);
 }
 
 real GCN::get_l2_penalty() const
 {
     dev_l2.set_zero();
     const auto &weights = variables[2];
-    const natural n_blocks = std::min(CEIL(weights->size, N_THREADS), static_cast<natural>(N_BLOCKS));
-    get_l2_penalty_kernel<<<n_blocks, N_THREADS>>>(dev_l2_weight1.get(), weights->dev_data.get(), weights->size);
+    const natural n_blocks = std::min(CEIL(weights->size, N_THREADS), N_BLOCKS);
+    get_l2_penalty_kernel<<<n_blocks, N_THREADS>>>(dev_l2.get(), weights->dev_data.get(), weights->size);
+#ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-
-    reduce<<<n_blocks, N_THREADS>>>(dev_l2_weight1.get(), dev_l2.get(), weights->size);
+#endif
+    cudaDeviceSynchronize();
     real l2{0};
     dev_l2.copy_to_host(&l2);
     return adam_params->weight_decay * l2 / 2;
@@ -199,8 +207,8 @@ std::pair<real, real> GCN::eval(const natural current_split) const
     set_truth(current_split);
     for (const auto &m : modules)
         m->forward(false);
-    real test_loss = loss + get_l2_penalty();
-    real test_acc = get_accuracy();
+    const real test_loss = loss + get_l2_penalty();
+    const real test_acc = get_accuracy();
     return {test_loss, test_acc};
 }
 
@@ -215,7 +223,7 @@ __global__ void get_accuracy_kernel(const integer *dev_truth, const real *dev_da
     {
         if (dev_truth[i] < 0)
             return;
-        real truth_logit = dev_data[i * output_dim + dev_truth[i]];
+        const real truth_logit = dev_data[i * output_dim + dev_truth[i]];
         if (truth_logit < 0.)
             atomicAdd(wrong, 1);
     }
@@ -224,48 +232,44 @@ __global__ void get_accuracy_kernel(const integer *dev_truth, const real *dev_da
 real GCN::get_accuracy() const
 {
     dev_wrong.set_zero();
-    const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), static_cast<natural>(N_BLOCKS));
+    const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), N_BLOCKS);
     get_accuracy_kernel<<<n_blocks, N_THREADS>>>(dev_truth.get(), output->dev_data.get(), dev_wrong.get(), params->num_nodes, params->output_dim);
+#ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+#endif
+    cudaDeviceSynchronize();
     natural wrong{0};
     dev_wrong.copy_to_host(&wrong);
-    natural total = modules.back()->get_num_samples();
+    const natural total = modules.back()->get_num_samples();
     return static_cast<real>(total - wrong) / total;
 }
 
 // ##################################################################################
 
-/**
- * Train an epoch of the model
- */
 std::pair<real, real> GCN::train_epoch()
 {
-    // print_cpu(data->feature_value, data->feature_value.size());
-    // print_gpu(dev_data.dev_feature_value, dev_data.dev_feature_index.indices_size, dev_data.dev_feature_index.indices_size);
-    // set_input();  // set the input data
+// input set by constructor and by eval()
+#ifndef VERBOSE
+    set_input();
+#endif
     set_truth(1); // get the true labels for the dataset with split == 1 (train)
 
-    // print_gpu<integer>(dev_truth, params->num_nodes, params->num_nodes);
-    for (auto &m : modules) // iterate over the layer applying a forward pass
-        m->forward(true);   // true means train
+    for (const auto &m : modules) // iterate over the layer applying a forward pass
+        m->forward(true);         // true means train
+
+#ifdef VERBOSE
     // correct the loss with the l2 regularization
-    real l2 = get_l2_penalty();
-    real train_loss = loss + l2;
-    std::cout << "l2_loss: " << l2 << std::endl;
+    const real train_loss = loss + get_l2_penalty();
+    // compute the accuracy comparing the prediction against the truth
+    const real train_acc = get_accuracy();
+#endif
 
-    float train_acc = get_accuracy(); // compute the accuracy comparing the
-                                      //  prediction against the truth
-
-    for (int i = modules.size() - 1; i >= 0; i--)
+    for (integer i = modules.size() - 1; i >= 0; i--)
         modules[i]->backward(); // do a backward pass on the layers
 
     optimizer.step(); // apply a step of the adam optimization
 
-    // return {train_loss, train_acc};
-
-    // input->print(params->input_dim);
-    //  print_gpu(dev_data.dev_feature_value, dev_data.dev_feature_index.indices_size, dev_data.dev_feature_index.indices_size);
+    // DEBUG
     /*
         std::cout << "layer1_var1" << std::endl;
         variables[1]->print(params->hidden_dim);
@@ -277,13 +281,14 @@ std::pair<real, real> GCN::train_epoch()
         variables[4]->print(params->output_dim);
         std::cout << "layer2_weight" << std::endl;
         variables[5]->print(params->output_dim);
-
-    std::cout << "output" << std::endl;
-    variables[6]->print(params->output_dim);
-*/
-    // std::cout << "layer1_weight" << std::endl;
-    // variables[2]->print(params->hidden_dim);
+        std::cout << "output" << std::endl;
+        variables[6]->print(params->output_dim);
+    */
+#ifdef VERBOSE
     return {train_loss, train_acc};
+#else
+    return {0., 0.};
+#endif
 }
 
 // ##################################################################################
@@ -293,38 +298,43 @@ void GCN::run()
     natural epoch = 1;
     // real total_time = 0.0;
     std::vector<real> loss_history;
+    loss_history.reserve(params->epochs);
     // Iterate the training process based on the selected number of epoch
     for (; epoch <= params->epochs; epoch++)
     {
-        real train_loss{0.f}, train_acc{0.f}, val_loss{0.f}, val_acc{0.f};
-        timer_start(TMR_TRAIN); // just for timing purposes
-        std::tie(train_loss, train_acc) =
-            train_epoch(); // train the epoch and record the current train_loss and
-                           // train_accuracy
-                           // eval the model at the current step in order to obtain the val_loss and val_accuracy
+        real train_loss{0.f}, train_acc{0.f};
 
+        timer_start(TMR_TRAIN); // just for timing purposes
+        // train the epoch and record the current train_loss and train_accuracy
+        std::tie(train_loss, train_acc) = train_epoch();
+#ifdef VERBOSE
+        real val_loss{0.f}, val_acc{0.f};
+        // eval the model at the current step in order to obtain the val_loss and val_accuracy
         std::tie(val_loss, val_acc) = eval(2);
 
-        printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f "
-               "time=%.5f\n",
-               epoch, train_loss, train_acc, val_loss, val_acc,
-               timer_stop(TMR_TRAIN));
-        /*
-        loss_history.push_back(val_loss); // record the validation loss in order to
-                                  // apply an early stopping mechanism
+        printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f time=%.5f\n",
+               epoch, train_loss, train_acc, val_loss, val_acc, timer_stop(TMR_TRAIN));
 
-        // early stopping mechanism
-        if (params.early_stopping > 0 && epoch >= params.early_stopping) {
-        float recent_loss = 0.0;
-        for (int i = epoch - params.early_stopping; i < epoch; i++)
-        recent_loss += loss_history[i];
-        if (val_loss > recent_loss / params.early_stopping) {
-        printf("Early stopping...\n");
-        break;
+        if (params->early_stopping > 0)
+        {
+            // record the validation loss in order to apply an early stopping mechanism
+            loss_history.push_back(val_loss);
+            // early stopping mechanism
+            if (epoch >= params->early_stopping)
+            {
+                real recent_loss = 0.0;
+                for (natural i = epoch - params->early_stopping; i < epoch; i++)
+                    recent_loss += loss_history[i];
+                if (val_loss > recent_loss / params->early_stopping)
+                {
+                    printf("Early stopping...\n");
+                    break;
+                }
+            }
         }
-
-        }
-        */
+#else
+        timer_stop(TMR_TRAIN);
+#endif
     }
 
     PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
@@ -341,11 +351,10 @@ void GCN::run()
     PRINT_TIMER_AVERAGE(TMR_LOSS_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_OPTIMIZER, epoch);
 
-    float test_loss, test_acc;
+    real test_loss, test_acc;
     timer_start(TMR_TEST);
     std::tie(test_loss, test_acc) = eval(3); // eval the model on the test set
-    printf("test_loss=%.5f test_acc=%.5f time=%.5f\n", test_loss, test_acc,
-           timer_stop(TMR_TEST));
+    printf("test_loss=%.5f test_acc=%.5f time=%.5f\n", test_loss, test_acc, timer_stop(TMR_TEST));
 }
 
 // ##################################################################################

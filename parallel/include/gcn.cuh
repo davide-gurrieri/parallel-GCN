@@ -7,6 +7,7 @@
 #include "../include/shared_ptr.cuh"
 #include "../include/utils.cuh"
 #include "../include/variable.cuh"
+#include "../include/reduction.cuh"
 
 // #include <cuda_runtime.h>
 #include <utility> // for std::pair
@@ -65,9 +66,8 @@ class GCN
   Adam optimizer;
   dev_shared_ptr<randState> dev_rand_states;
   dev_shared_ptr<integer> dev_truth;
-  dev_shared_ptr<real> dev_l2_weight1; // used by get_l2_penalty()
-  dev_shared_ptr<real> dev_l2;         // used by get_l2_penalty()
-  dev_shared_ptr<natural> dev_wrong;   // used by get_accuracy()
+  dev_shared_ptr<real> dev_l2;       // used by get_l2_penalty()
+  dev_shared_ptr<natural> dev_wrong; // used by get_accuracy()
 
   void initialize_random();
   void initialize_truth();
