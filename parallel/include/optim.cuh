@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 #include <memory>
+#include <cuda_runtime.h>
 using std::shared_ptr;
 
 // ##################################################################################

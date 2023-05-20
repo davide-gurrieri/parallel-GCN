@@ -10,7 +10,7 @@
 #include "../include/reduction.cuh"
 #include "../include/smart_object.cuh"
 
-// #include <cuda_runtime.h>
+#include <cuda_runtime.h>
 #include <utility> // for std::pair
 #include <memory>  // for std::shared_ptr and std::unique_ptr
 #include <vector>

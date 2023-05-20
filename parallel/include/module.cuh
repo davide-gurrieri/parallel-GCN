@@ -2,6 +2,7 @@
 #define MODULE_CUH
 
 #include <memory>
+#include <cuda_runtime.h>
 using std::shared_ptr;
 using std::unique_ptr;
 
