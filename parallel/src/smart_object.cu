@@ -7,6 +7,12 @@ smart_object<cudaStream_t>::smart_object() : refCount(new size_t(1))
 }
 
 template <>
+smart_object<cudaStream_t>::smart_object(StreamPriority priority) : refCount(new size_t(1))
+{
+    cudaStreamCreateWithPriority(&object, cudaStreamDefault, priority);
+}
+
+template <>
 smart_object<cudaEvent_t>::smart_object() : refCount(new size_t(1))
 {
     cudaEventCreate(&object);

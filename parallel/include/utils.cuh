@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cmath>
 #include <curand_kernel.h>
+#include <cuda_fp16.h>
 
 // * for std::accumulate
 #include <numeric>

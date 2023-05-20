@@ -37,7 +37,7 @@ void Variable::glorot(const natural in_size, const natural out_size) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################

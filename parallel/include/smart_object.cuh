@@ -3,11 +3,26 @@
 #include <cuda_runtime.h>
 #include "../include/utils.cuh"
 
+/*
+Code to see the priority range of streams
+int minPriority, maxPriority;
+cudaDeviceGetStreamPriorityRange(&minPriority, &maxPriority);
+std::cout << "minPriority: " << minPriority << std::endl;
+std::cout << "maxPriority: " << maxPriority << std::endl;
+*/
+enum StreamPriority
+{
+    Low = 0,
+    High = -5
+};
+
 template <typename T>
 class smart_object
 {
 public:
     smart_object() : refCount(nullptr), object(nullptr) {}
+
+    explicit smart_object(StreamPriority priority) : refCount(nullptr), object(nullptr) {}
 
     smart_object(const smart_object &other)
         : object(other.object), refCount(other.refCount)
@@ -59,13 +74,16 @@ template <>
 smart_object<cudaStream_t>::smart_object();
 
 template <>
+smart_object<cudaStream_t>::smart_object(StreamPriority priority);
+
+template <>
+void smart_object<cudaEvent_t>::DecrementRefCount();
+
+template <>
 smart_object<cudaEvent_t>::smart_object();
 
 template <>
 void smart_object<cudaStream_t>::DecrementRefCount();
-
-template <>
-void smart_object<cudaEvent_t>::DecrementRefCount();
 
 inline std::vector<smart_object<cudaStream_t>> streams;
 inline std::vector<smart_object<cudaEvent_t>> events;

@@ -69,7 +69,7 @@ void Dropout::forward(bool training) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
     // std::cout << "size of rand: " << sizeof(curandStatePhilox4_32_10_t) << std::endl;
     timer_stop(TMR_DROPOUT_FW);
 }
@@ -97,7 +97,7 @@ void Dropout::backward() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
     timer_stop(TMR_DROPOUT_BW);
 }
 
@@ -133,7 +133,7 @@ void SparseMatmul::forward(bool training) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     timer_stop(TMR_SPMATMUL_FW);
 }
@@ -168,7 +168,7 @@ void SparseMatmul::backward() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     timer_stop(TMR_SPMATMUL_BW);
 }
@@ -212,7 +212,7 @@ void GraphSum::forward(bool training) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     timer_stop(TMR_GRAPHSUM_FW);
 }
@@ -229,7 +229,7 @@ void GraphSum::backward() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     timer_stop(TMR_GRAPHSUM_BW);
 }
@@ -267,7 +267,7 @@ void ReLU::forward(bool training) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     timer_stop(TMR_RELU_FW);
 }
@@ -294,7 +294,7 @@ void ReLU::backward() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     timer_stop(TMR_RELU_BW);
 }
@@ -365,7 +365,7 @@ void Matmul::forward(bool training) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     timer_stop(TMR_MATMUL_FW);
 }
@@ -420,7 +420,7 @@ __global__ void matmul_kernel_backward_1(real *a, const real *b, const real *c, 
 }
 
 // 2 versione con loop lungo e shared memory
-/*
+
 __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
 {
     // shared memory arrays that are used as tiles to store a portion of matrices A and B.
@@ -468,20 +468,20 @@ void Matmul::backward() const
     dim3 n_blocks_2(CEIL(p, TILE_DIM), CEIL(n, TILE_DIM));
     dim3 n_threads(TILE_DIM, TILE_DIM);
     matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, streams[0].get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
-    #ifdef DEBUG_CUDA
-CHECK_CUDA_ERROR(cudaGetLastError());
+#ifdef DEBUG_CUDA
+    CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    matmul_kernel_backward_2<<<n_blocks_2, n_threads, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
-    #ifdef DEBUG_CUDA
-CHECK_CUDA_ERROR(cudaGetLastError());
+    matmul_kernel_backward_2<<<n_blocks_2, n_threads, 0, streams[1].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
+#ifdef DEBUG_CUDA
+    CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     timer_stop(TMR_MATMUL_BW);
 }
-*/
 
 // versione con atomicAdd
+/*
 __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -498,6 +498,7 @@ __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, 
     }
 }
 
+
 void Matmul::backward() const
 {
     timer_start(TMR_MATMUL_BW);
@@ -512,15 +513,16 @@ void Matmul::backward() const
 #endif
 
     const natural n_blocks_2 = std::min(CEIL(m * p, TILE_DIM), N_BLOCKS);
-    matmul_kernel_backward_2<<<n_blocks_2, N_THREADS, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
+    matmul_kernel_backward_2<<<n_blocks_2, N_THREADS, 0, streams[1].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    // cudaStreamSynchronize(streams[0].get());
+    cudaStreamSynchronize(streams[0].get());
 
     timer_stop(TMR_MATMUL_BW);
 }
-
+*/
 // serial version
 /*
 void Matmul::backward() const
@@ -617,11 +619,11 @@ void CrossEntropyLoss::forward(bool training) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     dev_loss_res.set_zero();
     reduce<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_loss.get(), dev_loss_res.get(), DIM);
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
     dev_loss_res.copy_to_host(loss);
     *loss /= num_samples;
 
@@ -687,7 +689,7 @@ void CrossEntropyLoss::forward(bool training) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 
     dev_loss_res.copy_to_host(loss);
     *loss /= num_samples;

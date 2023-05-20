@@ -26,7 +26,7 @@ public:
 #else
         cudaMemset(ptr, 0, n_elements * sizeof(T));
 #endif
-        cudaDeviceSynchronize();
+        // cudaDeviceSynchronize();
     }
 
     // Copy constructor
@@ -134,7 +134,7 @@ public:
 #else
         cudaMemset(ptr, 0, n_elements * sizeof(T));
 #endif
-        cudaDeviceSynchronize();
+        // cudaDeviceSynchronize();
     }
 
     int get_n_elements() const

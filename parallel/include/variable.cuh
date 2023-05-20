@@ -5,6 +5,7 @@
 #include "../include/shared_ptr.cuh"
 #include <vector>
 #include <curand_kernel.h>
+#include "../include/smart_object.cuh"
 
 class Variable
 {

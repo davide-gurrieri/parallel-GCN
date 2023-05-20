@@ -4,6 +4,7 @@
 #include "../include/utils.cuh"
 #include "../include/timer.h"
 #include "../include/shared_ptr.cuh"
+#include "../include/smart_object.cuh"
 #include <utility>
 #include <vector>
 #include <memory>

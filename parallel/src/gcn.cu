@@ -34,7 +34,8 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex
 
 GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_) : params(params_), adam_params(adam_params_), data(data_), dev_data{DevGCNData(*data_)}
 {
-    streams.emplace_back();
+    streams.emplace_back(High);
+    streams.emplace_back(Low);
     initialize_random();
     initialize_truth();
     dev_wrong = dev_shared_ptr<natural>(1); // used by get_accuracy()
@@ -109,7 +110,7 @@ void GCN::initialize_random()
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################
@@ -138,7 +139,7 @@ void GCN::set_input() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################
@@ -165,7 +166,7 @@ void GCN::set_truth(const natural current_split) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################
@@ -194,10 +195,10 @@ real GCN::get_l2_penalty() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
     real l2{0};
     dev_l2.copy_to_host(&l2);
-    return adam_params->weight_decay * l2 / 2;
+    return adam_params->weight_decay * l2 / real(2);
 }
 
 // ##################################################################################
@@ -225,7 +226,7 @@ __global__ void get_accuracy_kernel(const integer *dev_truth, const real *dev_da
         if (dev_truth[i] < 0)
             return;
         const real truth_logit = dev_data[i * output_dim + dev_truth[i]];
-        if (truth_logit < 0.)
+        if (truth_logit < static_cast<real>(0))
             atomicAdd(wrong, 1);
     }
 }
@@ -238,11 +239,11 @@ real GCN::get_accuracy() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(streams[0].get());
     natural wrong{0};
     dev_wrong.copy_to_host(&wrong);
     const natural total = modules.back()->get_num_samples();
-    return static_cast<real>(total - wrong) / total;
+    return static_cast<real>(total - wrong) / static_cast<real>(total);
 }
 
 // ##################################################################################
@@ -326,7 +327,7 @@ void GCN::run()
                 real recent_loss = 0.0;
                 for (natural i = epoch - params->early_stopping; i < epoch; i++)
                     recent_loss += loss_history[i];
-                if (val_loss > recent_loss / params->early_stopping)
+                if (val_loss > recent_loss / static_cast<real>(params->early_stopping))
                 {
                     printf("Early stopping...\n");
                     break;
