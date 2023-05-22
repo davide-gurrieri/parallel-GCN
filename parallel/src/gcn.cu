@@ -34,11 +34,15 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex
 
 GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_) : params(params_), adam_params(adam_params_), data(data_), dev_data{DevGCNData(*data_)}
 {
-    streams.emplace_back(High);
-    streams.emplace_back(Low);
+    streams.emplace_back(High); // forward + l2_loss + get_accuracy
+    streams.emplace_back(High); // backward + optimization 1
+    streams.emplace_back(Low);  // backard + optimization 2
+    events.resize(2);
     initialize_random();
     initialize_truth();
     dev_wrong = dev_shared_ptr<natural>(1); // used by get_accuracy()
+    pinned_wrong = pinned_host_ptr<natural>(1);
+    loss = pinned_host_ptr<real>(1);
 
     modules.reserve(8);
     variables.reserve(7);
@@ -58,6 +62,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     shared_ptr<Variable> layer1_weight = variables.back();
     layer1_weight->glorot(params->input_dim, params->hidden_dim);
     dev_l2 = dev_shared_ptr<real>(1); // used by get_l2_penalty()
+    pinned_l2 = pinned_host_ptr<real>(1);
 
     modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dim));
 
@@ -89,7 +94,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     modules.push_back(std::make_unique<GraphSum>(layer2_var1, output, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->output_dim));
 
     // cross entropy loss
-    modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_truth, &loss, params->output_dim));
+    modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_truth, loss, params->output_dim));
 
     // optimizer
     optimizer = Adam({{layer1_weight, true}, {layer2_weight, false}}, adam_params);
@@ -139,7 +144,7 @@ void GCN::set_input() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################
@@ -166,7 +171,7 @@ void GCN::set_truth(const natural current_split) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################
@@ -188,7 +193,7 @@ __global__ void get_l2_penalty_kernel(real *dev_l2, const real *weight, const na
 
 real GCN::get_l2_penalty() const
 {
-    dev_l2.set_zero();
+    dev_l2.set_zero(streams[0]);
     const auto &weights = variables[2];
     const natural n_blocks = std::min(CEIL(weights->size, N_THREADS), N_BLOCKS);
     get_l2_penalty_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_l2.get(), weights->dev_data.get(), weights->size);
@@ -196,9 +201,9 @@ real GCN::get_l2_penalty() const
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
     cudaStreamSynchronize(streams[0].get());
-    real l2{0};
-    dev_l2.copy_to_host(&l2);
-    return adam_params->weight_decay * l2 / real(2);
+    dev_l2.copy_to_host_async(pinned_l2.get(), streams[0]);
+    cudaStreamSynchronize(streams[0].get());
+    return adam_params->weight_decay * (*pinned_l2) / real(2);
 }
 
 // ##################################################################################
@@ -209,7 +214,7 @@ std::pair<real, real> GCN::eval(const natural current_split) const
     set_truth(current_split);
     for (const auto &m : modules)
         m->forward(false);
-    const real test_loss = loss + get_l2_penalty();
+    const real test_loss = *loss + get_l2_penalty();
     const real test_acc = get_accuracy();
     return {test_loss, test_acc};
 }
@@ -233,17 +238,17 @@ __global__ void get_accuracy_kernel(const integer *dev_truth, const real *dev_da
 
 real GCN::get_accuracy() const
 {
-    dev_wrong.set_zero();
+    dev_wrong.set_zero(streams[0]);
     const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), N_BLOCKS);
     get_accuracy_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_truth.get(), output->dev_data.get(), dev_wrong.get(), params->num_nodes, params->output_dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
     cudaStreamSynchronize(streams[0].get());
-    natural wrong{0};
-    dev_wrong.copy_to_host(&wrong);
+    dev_wrong.copy_to_host_async(pinned_wrong.get(), streams[0]);
+    cudaStreamSynchronize(streams[0].get());
     const natural total = modules.back()->get_num_samples();
-    return static_cast<real>(total - wrong) / static_cast<real>(total);
+    return static_cast<real>(total - *pinned_wrong) / static_cast<real>(total);
 }
 
 // ##################################################################################
@@ -261,7 +266,7 @@ std::pair<real, real> GCN::train_epoch()
 
 #ifdef VERBOSE
     // correct the loss with the l2 regularization
-    const real train_loss = loss + get_l2_penalty();
+    const real train_loss = *loss + get_l2_penalty();
     // compute the accuracy comparing the prediction against the truth
     const real train_acc = get_accuracy();
 #endif

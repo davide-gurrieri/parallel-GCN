@@ -51,7 +51,9 @@ void Adam::step()
 
     step_count++;
     const real step_size = params->learning_rate * sqrtf(1 - powf(params->beta2, step_count)) / (1 - powf(params->beta1, step_count));
-    cudaStreamSynchronize(streams[1].get());
+    // cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(streams[1].get());
+    /*
     for (const auto &var : vars)
     {
         const natural n_blocks = std::min(CEIL(var.size, N_THREADS), static_cast<natural>(N_BLOCKS));
@@ -60,7 +62,17 @@ void Adam::step()
         CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
     }
-    cudaStreamSynchronize(streams[0].get());
+    */
+
+    for (natural i = 0; i < vars.size(); i++)
+    {
+        const natural n_blocks = std::min(CEIL(vars[i].size, N_THREADS), static_cast<natural>(N_BLOCKS));
+        adam_step_kernel<<<n_blocks, N_THREADS, 0, streams[i + 1].get()>>>(vars[i].dev_data.get(), vars[i].dev_grad.get(), vars[i].dev_m.get(), vars[i].dev_v.get(), vars[i].size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), vars[i].decay, step_size);
+        cudaEventRecord(events[i].get(), streams[i + 1].get());
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaGetLastError());
+#endif
+    }
 
     timer_stop(TMR_OPTIMIZER);
 }

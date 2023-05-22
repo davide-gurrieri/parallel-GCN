@@ -69,6 +69,8 @@ class GCN
   dev_shared_ptr<integer> dev_truth;
   dev_shared_ptr<real> dev_l2;       // used by get_l2_penalty()
   dev_shared_ptr<natural> dev_wrong; // used by get_accuracy()
+  pinned_host_ptr<real> pinned_l2;
+  pinned_host_ptr<natural> pinned_wrong;
 
   void initialize_random();
   void initialize_truth();
@@ -83,7 +85,7 @@ class GCN
 public:
   // std::vector<smart_object<cudaStream_t>> streams;
   // std::vector<smart_object<cudaStream_t>> events;
-  real loss;
+  pinned_host_ptr<real> loss;
   const GCNParams *params;
   const AdamParams *adam_params;
   GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_);

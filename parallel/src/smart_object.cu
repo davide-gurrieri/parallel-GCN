@@ -1,3 +1,4 @@
+/*
 #include "../include/smart_object.cuh"
 
 template <>
@@ -39,3 +40,4 @@ void smart_object<cudaEvent_t>::DecrementRefCount()
             cudaEventDestroy(object);
     }
 }
+*/

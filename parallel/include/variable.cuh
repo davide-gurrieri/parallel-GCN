@@ -17,8 +17,8 @@ public:
 
     Variable(const natural size_, const bool requires_grad = true, const dev_shared_ptr<randState> dev_rand_states_ = dev_shared_ptr<randState>());
     void print(const std::string &what, natural col) const;
-    void zero() const;
-    void zero_grad() const;
+    void zero(smart_stream stream) const;
+    void zero_grad(smart_stream stream) const;
     void glorot(const natural in_size, const natural out_size) const;
 };
 

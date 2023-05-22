@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 #include <vector>
 #include "../include/utils.cuh"
+#include "../include/smart_object.cuh"
 
 template <typename T>
 class dev_shared_ptr
@@ -21,12 +22,6 @@ public:
 #endif
         refCount = new int(1);
         n_elements = n_elements_;
-#ifdef DEBUG_CUDA
-        CHECK_CUDA_ERROR(cudaMemset(ptr, 0, n_elements * sizeof(T)));
-#else
-        cudaMemset(ptr, 0, n_elements * sizeof(T));
-#endif
-        // cudaDeviceSynchronize();
     }
 
     // Copy constructor
@@ -118,6 +113,15 @@ public:
 #endif
     }
 
+    void copy_to_device_async(const T *source, smart_stream stream) const
+    {
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaMemcpyAsync(ptr, source, n_elements * sizeof(T), cudaMemcpyHostToDevice, stream.get()));
+#else
+        cudaMemcpyAsync(ptr, source, n_elements * sizeof(T), cudaMemcpyHostToDevice, stream.get());
+#endif
+    }
+
     void copy_to_host(T *destination) const
     {
 #ifdef DEBUG_CUDA
@@ -127,12 +131,22 @@ public:
 #endif
     }
 
-    void set_zero() const
+    void copy_to_host_async(T *destination, smart_stream stream) const
     {
 #ifdef DEBUG_CUDA
-        CHECK_CUDA_ERROR(cudaMemset(ptr, 0, n_elements * sizeof(T)));
+        CHECK_CUDA_ERROR(cudaMemcpyAsync(destination, ptr, n_elements * sizeof(T), cudaMemcpyDeviceToHost, stream.get()));
 #else
-        cudaMemset(ptr, 0, n_elements * sizeof(T));
+        cudaMemcpyAsync(destination, ptr, n_elements * sizeof(T), cudaMemcpyDeviceToHost, stream.get());
+#endif
+    }
+
+    void set_zero(smart_stream stream) const
+    {
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaMemsetAsync(ptr, 0, n_elements * sizeof(T), stream.get()));
+#else
+        // cudaMemset(ptr, 0, n_elements * sizeof(T));
+        cudaMemsetAsync(ptr, 0, n_elements * sizeof(T), stream.get());
 #endif
         // cudaDeviceSynchronize();
     }
@@ -171,6 +185,143 @@ private:
                 CHECK_CUDA_ERROR(cudaFree(ptr));
 #else
                 cudaFree(ptr);
+#endif
+                delete refCount;
+            }
+        }
+    }
+};
+
+template <typename T>
+class pinned_host_ptr
+{
+public:
+    // Default constructor
+    pinned_host_ptr() : ptr(nullptr), refCount(nullptr) {}
+
+    // Constructor that allocates device memory using cudaMalloc
+    explicit pinned_host_ptr(size_t n_elements_)
+    {
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaMallocHost(&ptr, n_elements_ * sizeof(T)));
+#else
+        cudaMallocHost(&ptr, n_elements_ * sizeof(T));
+#endif
+        refCount = new int(1);
+        n_elements = n_elements_;
+    }
+
+    // Copy constructor
+    pinned_host_ptr(const pinned_host_ptr &other)
+    {
+        ptr = other.ptr;
+        refCount = other.refCount;
+        n_elements = other.n_elements;
+        (*refCount)++;
+    }
+
+    // Move constructor
+    pinned_host_ptr(pinned_host_ptr &&other) noexcept
+    {
+        ptr = other.ptr;
+        refCount = other.refCount;
+        n_elements = other.n_elements;
+        other.ptr = nullptr;
+        other.refCount = nullptr;
+        other.n_elements = 0;
+    }
+
+    // Copy assignment operator
+    pinned_host_ptr &operator=(const pinned_host_ptr &other)
+    {
+        if (this != &other)
+        {
+            decrementRefCount();
+            ptr = other.ptr;
+            refCount = other.refCount;
+            n_elements = other.n_elements;
+            (*refCount)++;
+        }
+        return *this;
+    }
+
+    // Move assignment operator
+    pinned_host_ptr &operator=(pinned_host_ptr &&other) noexcept
+    {
+        if (this != &other)
+        {
+            decrementRefCount();
+            ptr = other.ptr;
+            refCount = other.refCount;
+            n_elements = other.n_elements;
+            other.ptr = nullptr;
+            other.refCount = nullptr;
+            other.n_elements = 0;
+        }
+        return *this;
+    }
+
+    // Destructor
+    ~pinned_host_ptr()
+    {
+        decrementRefCount();
+    }
+
+    // Get the device pointer
+    T *get() const
+    {
+        return ptr;
+    }
+
+    // Check if the device pointer is null
+    bool isNull() const
+    {
+        return ptr == nullptr;
+    }
+
+    // Get the number of shared references
+    int useCount() const
+    {
+        return refCount != nullptr ? *refCount : 0;
+    }
+
+    // Dereferencing operator
+    T &operator*() const
+    {
+        return *ptr;
+    }
+
+    void set_zero(smart_stream stream) const
+    {
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaMemsetAsync(ptr, 0, n_elements * sizeof(T), stream.get()));
+#else
+        cudaMemsetAsync(ptr, 0, n_elements * sizeof(T), stream.get());
+#endif
+    }
+
+    int get_n_elements() const
+    {
+        return n_elements;
+    }
+
+private:
+    T *ptr;
+    int *refCount;
+    int n_elements;
+
+    // Decrement the reference count and free the device memory if the count reaches zero
+    void decrementRefCount()
+    {
+        if (refCount != nullptr)
+        {
+            (*refCount)--;
+            if (*refCount == 0)
+            {
+#ifdef DEBUG_CUDA
+                CHECK_CUDA_ERROR(cudaFreeHost(ptr));
+#else
+                cudaFreeHost(ptr);
 #endif
                 delete refCount;
             }

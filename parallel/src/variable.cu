@@ -42,14 +42,14 @@ void Variable::glorot(const natural in_size, const natural out_size) const
 
 // ##################################################################################
 
-void Variable::zero() const
+void Variable::zero(smart_stream stream) const
 {
-    dev_data.set_zero();
+    dev_data.set_zero(stream);
 }
 
-void Variable::zero_grad() const
+void Variable::zero_grad(smart_stream stream) const
 {
-    dev_grad.set_zero();
+    dev_grad.set_zero(stream);
 }
 
 // ##################################################################################
