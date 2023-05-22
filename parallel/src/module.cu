@@ -626,6 +626,8 @@ void CrossEntropyLoss::forward(bool training) const
     const natural DIM = logits->size / num_classes;
     const natural n_blocks = std::min(CEIL(DIM, N_THREADS), N_BLOCKS);
     cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss_res.get(), num_classes, DIM, num_samples, training);
+    if (training)
+        cudaEventRecord(events[3].get(), streams[0].get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -641,7 +643,11 @@ void CrossEntropyLoss::forward(bool training) const
 
 // ##################################################################################
 
-void CrossEntropyLoss::backward() const {}
+void CrossEntropyLoss::backward() const
+{
+    cudaStreamWaitEvent(streams[1].get(), events[3].get());
+    cudaStreamWaitEvent(streams[2].get(), events[3].get());
+}
 
 // ##################################################################################
 
