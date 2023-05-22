@@ -424,7 +424,7 @@ __global__ void matmul_kernel_backward_1(real *a, const real *b, const real *c, 
 }
 
 // 2 versione con loop lungo e shared memory
-
+/*
 __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
 {
     // shared memory arrays that are used as tiles to store a portion of matrices A and B.
@@ -484,9 +484,10 @@ void Matmul::backward() const
 
     timer_stop(TMR_MATMUL_BW);
 }
+*/
 
 // versione con atomicAdd
-/*
+
 __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -503,12 +504,10 @@ __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, 
     }
 }
 
-
 void Matmul::backward() const
 {
     timer_start(TMR_MATMUL_BW);
 
-    b->zero_grad(streams[2].get());
     const natural n_blocks_y_1 = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
     const dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
     const dim3 n_threads(TILE_DIM, TILE_DIM);
@@ -518,6 +517,8 @@ void Matmul::backward() const
 #endif
 
     const natural n_blocks_2 = std::min(CEIL(m * p, TILE_DIM), N_BLOCKS);
+    cudaStreamWaitEvent(streams[2].get(), events[4].get());
+    b->zero_grad(streams[2]);
     matmul_kernel_backward_2<<<n_blocks_2, N_THREADS, 0, streams[2].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -526,7 +527,7 @@ void Matmul::backward() const
 
     timer_stop(TMR_MATMUL_BW);
 }
-*/
+
 // serial version
 /*
 void Matmul::backward() const
