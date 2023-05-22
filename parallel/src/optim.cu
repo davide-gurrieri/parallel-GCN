@@ -22,10 +22,10 @@ Adam::Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, Adam
     beta1 = dev_shared_ptr<real>(1);
     beta2 = dev_shared_ptr<real>(1);
     eps = dev_shared_ptr<real>(1);
-    weight_decay.copy_to_device(&(params->weight_decay));
-    beta1.copy_to_device(&(params->beta1));
-    beta2.copy_to_device(&(params->beta2));
-    eps.copy_to_device(&(params->eps));
+    weight_decay.copy_to_device_async(&(params->weight_decay), streams[0]);
+    beta1.copy_to_device_async(&(params->beta1), streams[0]);
+    beta2.copy_to_device_async(&(params->beta2), streams[0]);
+    eps.copy_to_device_async(&(params->eps), streams[0]);
 }
 
 // ##################################################################################

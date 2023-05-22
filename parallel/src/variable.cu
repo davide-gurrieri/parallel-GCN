@@ -33,11 +33,11 @@ void Variable::glorot(const natural in_size, const natural out_size) const
     const real range = sqrtf(6.0f / (in_size + out_size));
     const real scale = range * 2;
     const natural n_blocks = std::min(CEIL(size, N_THREADS), N_BLOCKS);
-    glorot_kernel<<<n_blocks, N_THREADS>>>(dev_data.get(), size, scale, dev_rand_states.get());
+    glorot_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_data.get(), size, scale, dev_rand_states.get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################

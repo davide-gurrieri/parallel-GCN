@@ -73,7 +73,6 @@ class GCN
   pinned_host_ptr<natural> pinned_wrong;
 
   void initialize_random();
-  void initialize_truth();
   void set_input() const;
   void set_truth(const natural current_split) const;
 
