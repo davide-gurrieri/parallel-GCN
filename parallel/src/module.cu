@@ -129,8 +129,7 @@ void SparseMatmul::forward(bool training) const
     timer_start(TMR_SPMATMUL_FW);
 
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
-    if (training)
-        cudaStreamWaitEvent(streams[0].get(), events[0].get());
+    cudaStreamWaitEvent(streams[0].get(), events[0].get());
     sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -229,6 +228,7 @@ void GraphSum::backward() const
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
     sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    cudaEventRecord(events[4].get(), streams[1].get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -364,8 +364,7 @@ void Matmul::forward(bool training) const
     const natural n_blocks_y = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
     const dim3 n_blocks(CEIL(p, TILE_DIM), n_blocks_y);
     const dim3 n_threads(TILE_DIM, TILE_DIM);
-    if (training)
-        cudaStreamWaitEvent(streams[0].get(), events[1].get());
+    cudaStreamWaitEvent(streams[0].get(), events[1].get());
     matmul_kernel_forward<<<n_blocks, n_threads, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -476,6 +475,7 @@ void Matmul::backward() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
+    cudaStreamWaitEvent(streams[2].get(), events[4].get());
     matmul_kernel_backward_2<<<n_blocks_2, n_threads, 0, streams[2].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -646,7 +646,6 @@ void CrossEntropyLoss::forward(bool training) const
 void CrossEntropyLoss::backward() const
 {
     cudaStreamWaitEvent(streams[1].get(), events[3].get());
-    cudaStreamWaitEvent(streams[2].get(), events[3].get());
 }
 
 // ##################################################################################

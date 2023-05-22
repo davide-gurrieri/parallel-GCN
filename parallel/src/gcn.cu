@@ -37,7 +37,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     streams.emplace_back(High); // forward + l2_loss + get_accuracy
     streams.emplace_back(High); // backward + optimization 1
     streams.emplace_back(High); // backard + optimization 2
-    events.resize(4);
+    events.resize(5);
     initialize_random();
     dev_truth = dev_shared_ptr<integer>(params->num_nodes);
     dev_wrong = dev_shared_ptr<natural>(1); // used by get_accuracy()
