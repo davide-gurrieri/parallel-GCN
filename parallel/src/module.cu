@@ -581,7 +581,7 @@ __global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const 
     for (natural i = id; i < num_nodes; i += blockDim.x * gridDim.x)
     {
         if (dev_truth[i] < 0)
-            return;
+            continue;
         real *logit = &dev_data[i * num_classes];
         real sum_exp = 0.;
         real max_logit = logit[0];
@@ -596,11 +596,6 @@ __global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const 
             sum_exp += expf(logit[j]);
         }
         sum += logf(sum_exp) - logit[dev_truth[i]];
-        sum = warp_reduce(sum);
-        // Obtain the sum of values in the current warp;
-        if ((threadIdx.x & (warp_size - 1)) == 0)
-            // Same as (threadIdx.x % warp_size) == 0 but faster
-            atomicAdd(dev_loss_res, sum);
 
         if (training)
         {
@@ -613,6 +608,10 @@ __global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const 
             dev_grad[i * num_classes + dev_truth[i]] -= 1.0 / num_samples;
         }
     }
+    sum = warp_reduce(sum);
+    // Obtain the sum of values in the current warp;
+    if ((threadIdx.x & (warp_size - 1)) == 0)
+        atomicAdd(dev_loss_res, sum);
 }
 
 void CrossEntropyLoss::forward(bool training) const
@@ -634,14 +633,75 @@ void CrossEntropyLoss::forward(bool training) const
 #endif
     // cudaStreamSynchronize(streams[0].get());
     dev_loss_res.copy_to_host_async(loss.get(), streams[0]);
-    /*
-    cudaStreamSynchronize(streams[0].get());
-    *loss /= num_samples;
-    */
+
+    // cudaStreamSynchronize(streams[0].get());
+    //*loss /= num_samples;
 
     timer_stop(TMR_LOSS_FW);
 }
 
+/*
+// sequential version for debug
+// commentare anche "*loss /= modules.back()->get_num_samples();" in gcn.cu
+// risolve la loss ma non la validation accuracy
+void CrossEntropyLoss::forward(bool training) const
+{
+
+    timer_start(TMR_LOSS_FW);
+    std::vector<real> data(logits->size);
+    logits->dev_data.copy_to_host(data.data());
+    const natural DIM = logits->size / num_classes;
+    std::vector<integer> truth(DIM);
+    dev_truth.copy_to_host(truth.data());
+    std::vector<real> grad(logits->size);
+
+    float total_loss = 0;
+    int count = 0;
+    if (training)
+        logits->zero_grad(streams[0]);
+
+    // iterate over outputs rows (nodes)
+    for (int i = 0; i < data.size() / num_classes; i++)
+    {
+        if (truth[i] < 0) // only train labels
+            continue;
+        count++; // count the number of training nodes (labels)
+        float *logit =
+            &data[i * num_classes]; // output row of the i-th node
+        float max_logit = -1e30, sum_exp = 0;
+        // get the maximum value of each node
+        for (int j = 0; j < num_classes; j++)
+            max_logit = fmax(max_logit, logit[j]);
+        // calculate the loss applying the softmax
+        for (int j = 0; j < num_classes; j++)
+        {
+            logit[j] -= max_logit; // numerical stability
+            sum_exp += expf(logit[j]);
+        }
+        total_loss += logf(sum_exp) - logit[truth[i]]; // eq (10) of the paper ???
+
+        if (training)
+        {
+            for (int j = 0; j < num_classes; j++)
+            {
+                float prob = expf(logit[j]) / sum_exp;
+                grad[i * num_classes + j] = prob;
+            }
+            grad[i * num_classes + truth[i]] -= 1.0;
+        }
+    }
+    logits->dev_data.copy_to_device(data.data());
+
+    *loss = total_loss; //! / count;
+    if (training)
+    {
+        for (float &i : grad)
+            i /= count;
+        logits->dev_grad.copy_to_device(grad.data());
+    }
+    timer_stop(TMR_LOSS_FW);
+}
+*/
 // ##################################################################################
 
 void CrossEntropyLoss::backward() const

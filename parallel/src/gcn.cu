@@ -138,7 +138,6 @@ void GCN::set_input() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################
@@ -165,7 +164,6 @@ void GCN::set_truth(const natural current_split) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################
@@ -212,6 +210,7 @@ std::pair<real, real> GCN::eval(const natural current_split) const
     *loss /= modules.back()->get_num_samples();
     const real test_loss = *loss + get_l2_penalty();
     const real test_acc = get_accuracy();
+    cudaStreamSynchronize(streams[0].get());
     return {test_loss, test_acc};
 }
 
@@ -225,9 +224,10 @@ __global__ void get_accuracy_kernel(const integer *dev_truth, const real *dev_da
     for (natural i = id; i < num_nodes; i += blockDim.x * gridDim.x)
     {
         if (dev_truth[i] < 0)
-            return;
+            continue;
         const real truth_logit = dev_data[i * output_dim + dev_truth[i]];
-        if (truth_logit < static_cast<real>(0))
+
+        if (truth_logit < 0)
             atomicAdd(wrong, 1);
     }
 }
@@ -240,7 +240,6 @@ real GCN::get_accuracy() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
     dev_wrong.copy_to_host_async(pinned_wrong.get(), streams[0]);
     cudaStreamSynchronize(streams[0].get());
     const natural total = modules.back()->get_num_samples();

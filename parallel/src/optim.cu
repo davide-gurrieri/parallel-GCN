@@ -8,7 +8,9 @@ AdamVariable::AdamVariable(shared_ptr<Variable> var, bool decay_) : dev_data(var
 {
     dev_m = dev_shared_ptr<real>(size);
     dev_v = dev_shared_ptr<real>(size);
-    cudaDeviceSynchronize();
+    dev_m.set_zero(streams[0]);
+    dev_v.set_zero(streams[0]);
+    cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################
@@ -26,6 +28,7 @@ Adam::Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, Adam
     beta1.copy_to_device_async(&(params->beta1), streams[0]);
     beta2.copy_to_device_async(&(params->beta2), streams[0]);
     eps.copy_to_device_async(&(params->eps), streams[0]);
+    cudaStreamSynchronize(streams[0].get());
 }
 
 // ##################################################################################
