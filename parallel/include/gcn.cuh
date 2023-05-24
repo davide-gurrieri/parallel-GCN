@@ -73,11 +73,12 @@ class GCN
   pinned_host_ptr<natural> pinned_wrong;
 
   void initialize_random();
-  void set_input() const;
-  void set_truth(const natural current_split) const;
+  void set_input(smart_stream stream, bool first) const;
+  void set_truth(const natural current_split, smart_stream stream) const;
 
-  real get_accuracy() const;
-  real get_l2_penalty() const;
+  void get_accuracy(smart_stream stream) const;
+  void get_l2_penalty(smart_stream stream) const;
+  std::pair<real, real> finalize(smart_stream stream) const;
   std::pair<real, real> train_epoch();
   std::pair<real, real> eval(const natural current_split) const;
 

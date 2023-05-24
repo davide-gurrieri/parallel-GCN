@@ -57,7 +57,7 @@ __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, const ran
 }
 */
 
-void Dropout::forward(bool training) const
+void Dropout::forward(bool training, smart_stream stream) const
 {
     if (!training)
         return;
@@ -65,11 +65,11 @@ void Dropout::forward(bool training) const
     timer_start(TMR_DROPOUT_FW);
     const real scale = 1.0 / (1.0 - p);
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS_DROPOUT), N_BLOCKS);
-    dropout_kernel_forward<<<n_blocks, N_THREADS_DROPOUT, 0, streams[0].get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
+    dropout_kernel_forward<<<n_blocks, N_THREADS_DROPOUT, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(stream.get());
     //  std::cout << "size of rand: " << sizeof(curandStatePhilox4_32_10_t) << std::endl;
     timer_stop(TMR_DROPOUT_FW);
 }
@@ -124,17 +124,18 @@ __global__ void sparse_matmul_kernel_forward(const real *a, const real *b, real 
     }
 }
 
-void SparseMatmul::forward(bool training) const
+void SparseMatmul::forward(bool training, smart_stream stream) const
 {
     timer_start(TMR_SPMATMUL_FW);
 
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
-    cudaStreamWaitEvent(streams[0].get(), events[0].get());
-    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
+    if (!training)
+        cudaStreamWaitEvent(stream.get(), events[0].get());
+    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(stream.get());
 
     timer_stop(TMR_SPMATMUL_FW);
 }
@@ -202,19 +203,19 @@ __global__ void graphsum_kernel(const real *dev_graph_value, const real *dev_in,
 }
 */
 
-void GraphSum::forward(bool training) const
+void GraphSum::forward(bool training, smart_stream stream) const
 {
 
     timer_start(TMR_GRAPHSUM_FW);
 
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
-    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
-    // graphsum_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    // graphsum_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(stream.get());
 
     timer_stop(TMR_GRAPHSUM_FW);
 }
@@ -261,16 +262,16 @@ __global__ void relu_kernel_forward(real *dev_data, bool *dev_mask, const natura
     }
 }
 
-void ReLU::forward(bool training) const
+void ReLU::forward(bool training, smart_stream stream) const
 {
     timer_start(TMR_RELU_FW);
 
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    relu_kernel_forward<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(in->dev_data.get(), dev_mask.get(), in->size, training);
+    relu_kernel_forward<<<n_blocks, N_THREADS, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), in->size, training);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(stream.get());
 
     timer_stop(TMR_RELU_FW);
 }
@@ -357,19 +358,20 @@ __global__ void matmul_kernel_forward(const real *a, const real *b, real *c, con
     }
 }
 
-void Matmul::forward(bool training) const
+void Matmul::forward(bool training, smart_stream stream) const
 {
     timer_start(TMR_MATMUL_FW);
 
     const natural n_blocks_y = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
     const dim3 n_blocks(CEIL(p, TILE_DIM), n_blocks_y);
     const dim3 n_threads(TILE_DIM, TILE_DIM);
-    cudaStreamWaitEvent(streams[0].get(), events[1].get());
-    matmul_kernel_forward<<<n_blocks, n_threads, 0, streams[0].get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), m, n, p);
+    if (!training)
+        cudaStreamWaitEvent(stream.get(), events[1].get());
+    matmul_kernel_forward<<<n_blocks, n_threads, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(stream.get());
 
     timer_stop(TMR_MATMUL_FW);
 }
@@ -614,28 +616,24 @@ __global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const 
         atomicAdd(dev_loss_res, sum);
 }
 
-void CrossEntropyLoss::forward(bool training) const
+void CrossEntropyLoss::forward(bool training, smart_stream stream) const
 {
 
     timer_start(TMR_LOSS_FW);
 
     if (training)
-        logits->zero_grad(streams[0]);
+        logits->zero_grad(stream);
 
-    dev_loss_res.set_zero(streams[0]);
+    dev_loss_res.set_zero(stream);
     const natural DIM = logits->size / num_classes;
     const natural n_blocks = std::min(CEIL(DIM, N_THREADS), N_BLOCKS);
-    cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss_res.get(), num_classes, DIM, num_samples, training);
+    cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss_res.get(), num_classes, DIM, num_samples, training);
     if (training)
-        cudaEventRecord(events[3].get(), streams[0].get());
+        cudaEventRecord(events[3].get(), stream.get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
-    dev_loss_res.copy_to_host_async(loss.get(), streams[0]);
-
-    // cudaStreamSynchronize(streams[0].get());
-    //*loss /= num_samples;
+    dev_loss_res.copy_to_host_async(loss.get(), stream);
 
     timer_stop(TMR_LOSS_FW);
 }
@@ -644,7 +642,7 @@ void CrossEntropyLoss::forward(bool training) const
 // sequential version for debug
 // commentare anche "*loss /= modules.back()->get_num_samples();" in gcn.cu
 // risolve la loss ma non la validation accuracy
-void CrossEntropyLoss::forward(bool training) const
+void CrossEntropyLoss::forward(bool training, smart_stream stream) const
 {
 
     timer_start(TMR_LOSS_FW);
