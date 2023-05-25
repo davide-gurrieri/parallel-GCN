@@ -31,7 +31,6 @@ namespace cudaParams
     natural TILE_DIM = 8;
 }
 */
-#define VERBOSE
 constexpr natural N_THREADS = 1024;
 constexpr natural N_THREADS_DROPOUT = 1024;
 constexpr natural N_BLOCKS = 128; // 8 * 16 with 16 number of SM (multiProcessorCount)

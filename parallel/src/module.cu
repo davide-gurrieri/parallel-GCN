@@ -119,7 +119,11 @@ __global__ void sparse_matmul_kernel_forward(const real *a, const real *b, real 
         real sum = 0;
 #pragma unroll
         for (natural jj = indptr[row]; jj < indptr[row + 1]; jj++)
+#ifdef FEATURE
             sum += a[jj] * b[indices[jj] * p + col];
+#else
+            sum += b[indices[jj] * p + col];
+#endif
         c[i] = sum;
     }
 }
@@ -154,8 +158,11 @@ __global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real
         for (natural jj = indptr[row]; jj < indptr[row + 1]; jj++)
         {
             natural j = indices[jj];
+#ifdef FEATURE
             atomicAdd(&b[j * p + col], a[jj] * c[row * p + col]);
-            // b[j * p + col] += a[jj] * c[row * p + col]; BUG!
+#else
+            atomicAdd(&b[j * p + col], c[row * p + col]);
+#endif
         }
     }
 }
@@ -183,25 +190,21 @@ GraphSum::GraphSum(shared_ptr<Variable> in_, shared_ptr<Variable> out_, DevSpars
 
 // ##################################################################################
 
-/*
-// same as sparse_matmul_kernel_forward
-// n -> H; m -> N
-__global__ void graphsum_kernel(const real *dev_graph_value, const real *dev_in, real *dev_out, const natural *indptr, const natural *indices, const natural m, const natural n)
+__global__ void graphsum_kernel(const real *a, const real *b, real *c, const natural *indptr, const natural *indices, const natural m, const natural p)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
-    for (natural i = id; i < m * n; i += blockDim.x * gridDim.x)
+    for (natural i = id; i < m * p; i += blockDim.x * gridDim.x)
     {
-        const natural row = i / n;
-        const natural col = i % n;
+        const natural row = i / p;
+        const natural col = i % p;
         real sum = 0;
 #pragma unroll
         for (natural jj = indptr[row]; jj < indptr[row + 1]; jj++)
-            sum += dev_graph_value[jj] * dev_in[indices[jj] * n + col];
-        dev_out[i] = sum;
+            sum += a[jj] * b[indices[jj] * p + col];
+        c[i] = sum;
     }
 }
-*/
 
 void GraphSum::forward(bool training, smart_stream stream) const
 {
@@ -210,7 +213,7 @@ void GraphSum::forward(bool training, smart_stream stream) const
 
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
-    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    graphsum_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
     // graphsum_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -228,7 +231,7 @@ void GraphSum::backward() const
 
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
-    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    graphsum_kernel<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
     cudaEventRecord(events[4].get(), streams[1].get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());

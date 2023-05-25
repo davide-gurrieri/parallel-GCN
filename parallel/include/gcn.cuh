@@ -23,7 +23,7 @@ using std::unique_ptr;
 struct GCNParams
 {
   natural num_nodes, input_dim, hidden_dim{16}, output_dim;
-  real dropout{0.5};
+  real dropout_input{0.5}, dropout_layer1{0.5};
   natural epochs{100}, early_stopping{0};
   natural train_dim{0}, val_dim{0}, test_dim{0};
   void print_info() const;
@@ -36,8 +36,10 @@ struct GCNData
   SparseIndex feature_index, graph;
   std::vector<natural> split;
   std::vector<integer> label;
-  std::vector<real> feature_value;
   std::vector<real> graph_value;
+#ifdef FEATURE
+  std::vector<real> feature_value;
+#endif
 };
 
 // ##################################################################################
@@ -47,7 +49,9 @@ class DevGCNData
 public:
   DevSparseIndex dev_graph_index;   // adjacency matrix
   DevSparseIndex dev_feature_index; // feature
+#ifdef FEATURE
   dev_shared_ptr<real> dev_feature_value;
+#endif
   dev_shared_ptr<real> dev_graph_value;
   dev_shared_ptr<natural> dev_split;
   dev_shared_ptr<integer> dev_label;
@@ -73,7 +77,9 @@ class GCN
   pinned_host_ptr<natural> pinned_wrong;
 
   void initialize_random();
+#ifdef FEATURE
   void set_input(smart_stream stream, bool first) const;
+#endif
   void set_truth(const natural current_split, smart_stream stream) const;
 
   void get_accuracy(smart_stream stream) const;

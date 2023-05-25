@@ -30,7 +30,8 @@ int main(int argc, char **argv) {
   GetPot datafile(file_name.c_str());
   // GCNParams
   params.hidden_dim = datafile("hidden_dim", 0);
-  params.dropout = datafile("dropout", 0.0);
+  params.dropout_input = datafile("dropout_input", 0.0);
+  params.dropout_layer1 = datafile("dropout_layer1", 0.0);
   params.epochs = datafile("epochs", 0);
   params.early_stopping = datafile("early_stopping", 0);
   // AdamParams

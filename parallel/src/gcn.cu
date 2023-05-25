@@ -18,13 +18,16 @@ void GCNParams::print_info() const
 DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex(gcn_data.graph)), dev_feature_index(DevSparseIndex(gcn_data.feature_index))
 {
     label_size = gcn_data.label.size();
-
+#ifdef FEATURE
     dev_feature_value = dev_shared_ptr<real>(dev_feature_index.indices_size);
+#endif
     dev_graph_value = dev_shared_ptr<real>(dev_graph_index.indices_size);
     dev_split = dev_shared_ptr<natural>(label_size);
     dev_label = dev_shared_ptr<integer>(label_size);
 
+#ifdef FEATURE
     dev_feature_value.copy_to_device(gcn_data.feature_value.data());
+#endif
     dev_graph_value.copy_to_device(gcn_data.graph_value.data());
     dev_split.copy_to_device(gcn_data.split.data());
     dev_label.copy_to_device(gcn_data.label.data());
@@ -48,12 +51,14 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     modules.reserve(8);
     variables.reserve(7);
 
+#ifdef FEATURE
     // dropout
     variables.push_back(std::make_shared<Variable>(data_->feature_index.indices.size(), false));
     input = variables.back();
-    set_input(streams[0], true);
-
-    modules.push_back(std::make_unique<Dropout>(input, params->dropout, dev_rand_states));
+    modules.push_back(std::make_unique<Dropout>(input, params->dropout_input, dev_rand_states));
+#else
+    input = std::make_shared<Variable>();
+#endif
 
     // sparse matmul
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dim));
@@ -77,7 +82,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     modules.push_back(std::make_unique<ReLU>(layer1_var2));
 
     // dropout
-    modules.push_back(std::make_unique<Dropout>(layer1_var2, params->dropout, dev_rand_states));
+    modules.push_back(std::make_unique<Dropout>(layer1_var2, params->dropout_layer1, dev_rand_states));
 
     // dense matmul
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
@@ -121,6 +126,7 @@ void GCN::initialize_random()
 
 // ##################################################################################
 
+#ifdef FEATURE
 __global__ void set_input_kernel(real *dev_data, const real *dev_feature_value, const natural size)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -141,6 +147,7 @@ void GCN::set_input(smart_stream stream, bool first) const
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
 }
+#endif
 
 // ##################################################################################
 
@@ -204,7 +211,9 @@ void GCN::get_l2_penalty(smart_stream stream) const
 
 std::pair<real, real> GCN::eval(const natural current_split) const
 {
+#ifdef FEATURE
     set_input(streams[3], false);
+#endif
     set_truth(current_split, streams[3]);
     for (const auto &m : modules)
         m->forward(false, streams[3]);
@@ -255,12 +264,8 @@ void GCN::get_accuracy(smart_stream stream) const
 
 std::pair<real, real> GCN::train_epoch()
 {
-// input set by constructor and by eval()
-#ifndef VERBOSE
-    set_input();
-#endif
-    set_truth(1, streams[0]); // get the true labels for the dataset with split == 1 (train)
-
+    // input set by constructor and by eval()
+    set_truth(1, streams[0]);         // get the true labels for the dataset with split == 1 (train)
     for (const auto &m : modules)     // iterate over the layer applying a forward pass
         m->forward(true, streams[0]); // true means train
 
@@ -288,7 +293,6 @@ std::pair<real, real> GCN::train_epoch()
         variables[6]->print(params->output_dim);
     */
 
-#ifdef VERBOSE
     //! cudaStreamSynchronize(streams[0].get());
     //!  *loss /= modules.back()->get_num_samples();
     // correct the loss with the l2 regularization
@@ -297,9 +301,6 @@ std::pair<real, real> GCN::train_epoch()
     //! const real train_acc = get_accuracy(streams[0]);
     //! return {train_loss, train_acc};
     return finalize(streams[0]);
-#else
-    return {0., 0.};
-#endif
 }
 
 // ##################################################################################
@@ -318,7 +319,7 @@ void GCN::run()
         timer_start(TMR_TRAIN); // just for timing purposes
         // train the epoch and record the current train_loss and train_accuracy
         std::tie(train_loss, train_acc) = train_epoch();
-#ifdef VERBOSE
+
         real val_loss{0.f}, val_acc{0.f};
         // eval the model at the current step in order to obtain the val_loss and val_accuracy
         std::tie(val_loss, val_acc) = eval(2);
@@ -345,9 +346,6 @@ void GCN::run()
                 }
             }
         }
-#else
-        timer_stop(TMR_TRAIN);
-#endif
     }
 
     PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
