@@ -79,7 +79,7 @@ private:
 class smart_event
 {
 public:
-    smart_event() : refCount(new size_t(1)) { cudaEventCreate(&object); }
+    smart_event() : refCount(new size_t(1)) { cudaEventCreateWithFlags(&object, cudaEventDisableTiming); }
 
     smart_event(const smart_event &other)
         : object(other.object), refCount(other.refCount)
@@ -135,79 +135,13 @@ private:
     }
 };
 
-/*
-template <typename T>
-class smart_object
-{
-public:
-    smart_object() : refCount(nullptr), object(nullptr) {}
-
-    explicit smart_object(StreamPriority priority) : refCount(nullptr), object(nullptr) {}
-
-    smart_object(const smart_object &other)
-        : object(other.object), refCount(other.refCount)
-    {
-        IncrementRefCount();
-    }
-
-    smart_object &operator=(const smart_object &other)
-    {
-        if (this != &other)
-        {
-            DecrementRefCount();
-            object = other.object;
-            refCount = other.refCount;
-            IncrementRefCount();
-        }
-        return *this;
-    }
-
-    ~smart_object()
-    {
-        DecrementRefCount();
-    }
-
-    T get() const
-    {
-        return object;
-    }
-
-    size_t getRefCount() const
-    {
-        return *refCount;
-    }
-
-private:
-    T object;
-    size_t *refCount;
-
-    void IncrementRefCount()
-    {
-        if (refCount)
-            ++(*refCount);
-    }
-
-    void DecrementRefCount() {}
-};
-
-template <>
-smart_object<cudaStream_t>::smart_object();
-
-template <>
-smart_object<cudaStream_t>::smart_object(StreamPriority priority);
-
-template <>
-void smart_object<cudaEvent_t>::DecrementRefCount();
-
-template <>
-smart_object<cudaEvent_t>::smart_object();
-
-template <>
-void smart_object<cudaStream_t>::DecrementRefCount();
-
-inline std::vector<smart_object<cudaStream_t>> streams;
-inline std::vector<smart_object<cudaEvent_t>> events;
-*/
 inline std::vector<smart_stream> streams;
 inline std::vector<smart_event> events;
+
+// events[0] -> layer1_weight update
+// events[1] -> layer2_weight update
+// events[2] -> set_input start
+// events[3] -> end training forward pass
+// events[4] -> end first backward graphsum
+
 #endif

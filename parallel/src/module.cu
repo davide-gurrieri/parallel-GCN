@@ -62,16 +62,14 @@ void Dropout::forward(bool training, smart_stream stream) const
     if (!training)
         return;
 
-    timer_start(TMR_DROPOUT_FW);
+    // timer_start(TMR_DROPOUT_FW);
     const real scale = 1.0 / (1.0 - p);
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS_DROPOUT), N_BLOCKS);
     dropout_kernel_forward<<<n_blocks, N_THREADS_DROPOUT, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(stream.get());
-    //  std::cout << "size of rand: " << sizeof(curandStatePhilox4_32_10_t) << std::endl;
-    timer_stop(TMR_DROPOUT_FW);
+    // timer_stop(TMR_DROPOUT_FW);
 }
 
 // ##################################################################################
@@ -90,7 +88,7 @@ void Dropout::backward() const
     if (!dev_mask.get())
         return;
 
-    timer_start(TMR_DROPOUT_BW);
+    // timer_start(TMR_DROPOUT_BW);
     const real scale = 1.0 / (1.0 - p);
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
     dropout_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
@@ -98,7 +96,7 @@ void Dropout::backward() const
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
     // cudaStreamSynchronize(streams[0].get());
-    timer_stop(TMR_DROPOUT_BW);
+    // timer_stop(TMR_DROPOUT_BW);
 }
 
 // SPARSEMATMUL
@@ -121,10 +119,8 @@ __global__ void sparse_matmul_kernel_forward(const real *a, const real *b, real 
         for (natural jj = indptr[row]; jj < indptr[row + 1]; jj++)
 #ifdef FEATURE
             sum += a[jj] * b[indices[jj] * p + col];
-            // atomicAdd(&c[i], a[jj] * b[indices[jj] * p + col]);
 #else
             sum += b[indices[jj] * p + col];
-            // atomicAdd(&c[i], b[indices[jj] * p + col]);
 #endif
         c[i] = sum;
     }
@@ -132,7 +128,7 @@ __global__ void sparse_matmul_kernel_forward(const real *a, const real *b, real 
 
 void SparseMatmul::forward(bool training, smart_stream stream) const
 {
-    timer_start(TMR_SPMATMUL_FW);
+    // timer_start(TMR_SPMATMUL_FW);
 
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
     if (!training)
@@ -141,9 +137,8 @@ void SparseMatmul::forward(bool training, smart_stream stream) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(stream.get());
 
-    timer_stop(TMR_SPMATMUL_FW);
+    // timer_stop(TMR_SPMATMUL_FW);
 }
 
 // ##################################################################################
@@ -171,7 +166,7 @@ __global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real
 
 void SparseMatmul::backward() const
 {
-    timer_start(TMR_SPMATMUL_BW);
+    // timer_start(TMR_SPMATMUL_BW);
 
     b->zero_grad(streams[1]);
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
@@ -182,9 +177,8 @@ void SparseMatmul::backward() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
 
-    timer_stop(TMR_SPMATMUL_BW);
+    // timer_stop(TMR_SPMATMUL_BW);
 }
 
 // GRAPHSUM
@@ -213,25 +207,23 @@ __global__ void graphsum_kernel(const real *a, const real *b, real *c, const nat
 void GraphSum::forward(bool training, smart_stream stream) const
 {
 
-    timer_start(TMR_GRAPHSUM_FW);
+    // timer_start(TMR_GRAPHSUM_FW);
 
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
     graphsum_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
-    // graphsum_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(stream.get());
 
-    timer_stop(TMR_GRAPHSUM_FW);
+    // timer_stop(TMR_GRAPHSUM_FW);
 }
 
 // ###############################################################################
 
 void GraphSum::backward() const
 {
-    timer_start(TMR_GRAPHSUM_BW);
+    // timer_start(TMR_GRAPHSUM_BW);
 
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
@@ -240,9 +232,8 @@ void GraphSum::backward() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
 
-    timer_stop(TMR_GRAPHSUM_BW);
+    // timer_stop(TMR_GRAPHSUM_BW);
 }
 
 // RELU
@@ -271,16 +262,15 @@ __global__ void relu_kernel_forward(real *dev_data, bool *dev_mask, const natura
 
 void ReLU::forward(bool training, smart_stream stream) const
 {
-    timer_start(TMR_RELU_FW);
+    // timer_start(TMR_RELU_FW);
 
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
     relu_kernel_forward<<<n_blocks, N_THREADS, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), in->size, training);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(stream.get());
 
-    timer_stop(TMR_RELU_FW);
+    // timer_stop(TMR_RELU_FW);
 }
 
 // ##################################################################################
@@ -298,16 +288,15 @@ __global__ void relu_kernel_backward(real *d_in_grad, const bool *d_mask, const 
 
 void ReLU::backward() const
 {
-    timer_start(TMR_RELU_BW);
+    // timer_start(TMR_RELU_BW);
 
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
     relu_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
 
-    timer_stop(TMR_RELU_BW);
+    // timer_stop(TMR_RELU_BW);
 }
 
 // MATMUL
@@ -367,7 +356,7 @@ __global__ void matmul_kernel_forward(const real *a, const real *b, real *c, con
 
 void Matmul::forward(bool training, smart_stream stream) const
 {
-    timer_start(TMR_MATMUL_FW);
+    // timer_start(TMR_MATMUL_FW);
 
     const natural n_blocks_y = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
     const dim3 n_blocks(CEIL(p, TILE_DIM), n_blocks_y);
@@ -378,9 +367,8 @@ void Matmul::forward(bool training, smart_stream stream) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(stream.get());
 
-    timer_stop(TMR_MATMUL_FW);
+    // timer_stop(TMR_MATMUL_FW);
 }
 
 // ##################################################################################
@@ -472,7 +460,7 @@ __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, 
 
 void Matmul::backward() const
 {
-    timer_start(TMR_MATMUL_BW);
+    // timer_start(TMR_MATMUL_BW);
 
     // b->zero_grad();
     //  a->zero_grad();
@@ -491,7 +479,7 @@ void Matmul::backward() const
 #endif
     // cudaStreamSynchronize(streams[0].get());
 
-    timer_stop(TMR_MATMUL_BW);
+    // timer_stop(TMR_MATMUL_BW);
 }
 */
 
@@ -515,7 +503,7 @@ __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, 
 
 void Matmul::backward() const
 {
-    timer_start(TMR_MATMUL_BW);
+    // timer_start(TMR_MATMUL_BW);
 
     const natural n_blocks_y_1 = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
     const dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
@@ -532,45 +520,10 @@ void Matmul::backward() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
 
-    timer_stop(TMR_MATMUL_BW);
+    // timer_stop(TMR_MATMUL_BW);
 }
 
-// serial version
-/*
-void Matmul::backward() const
-{
-    timer_start(TMR_MATMUL_BW);
-    std::vector<real> my_a_grad(a->size, 0.f);
-    std::vector<real> my_b_grad(b->size, 0.f);
-
-    std::vector<real> my_c_grad(c->size);
-    std::vector<real> my_b(b->size);
-    std::vector<real> my_a(a->size);
-
-    a->dev_data.copy_to_host(my_a.data());
-    b->dev_data.copy_to_host(my_b.data());
-    c->dev_grad.copy_to_host(my_c_grad.data());
-
-    for (int i = 0; i < m; i++)
-        for (int j = 0; j < n; j++)
-        {
-            float tmp = 0;
-            for (int k = 0; k < p; k++)
-            {
-                tmp += my_c_grad[i * p + k] * my_b[j * p + k];
-                my_b_grad[j * p + k] += my_c_grad[i * p + k] * my_a[i * n + j];
-            }
-            my_a_grad[i * n + j] = tmp;
-        }
-
-    b->dev_grad.copy_to_device(my_b_grad.data());
-    a->dev_grad.copy_to_device(my_a_grad.data());
-
-    timer_stop(TMR_MATMUL_BW);
-}
-*/
 // CROSSENTROPYLOSS
 // ##################################################################################
 
@@ -626,7 +579,7 @@ __global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const 
 void CrossEntropyLoss::forward(bool training, smart_stream stream) const
 {
 
-    timer_start(TMR_LOSS_FW);
+    // timer_start(TMR_LOSS_FW);
 
     if (training)
         logits->zero_grad(stream);
@@ -642,71 +595,9 @@ void CrossEntropyLoss::forward(bool training, smart_stream stream) const
 #endif
     dev_loss_res.copy_to_host_async(loss.get(), stream);
 
-    timer_stop(TMR_LOSS_FW);
+    // timer_stop(TMR_LOSS_FW);
 }
 
-/*
-// sequential version for debug
-// commentare anche "*loss /= modules.back()->get_num_samples();" in gcn.cu
-// risolve la loss ma non la validation accuracy
-void CrossEntropyLoss::forward(bool training, smart_stream stream) const
-{
-
-    timer_start(TMR_LOSS_FW);
-    std::vector<real> data(logits->size);
-    logits->dev_data.copy_to_host(data.data());
-    const natural DIM = logits->size / num_classes;
-    std::vector<integer> truth(DIM);
-    dev_truth.copy_to_host(truth.data());
-    std::vector<real> grad(logits->size);
-
-    float total_loss = 0;
-    int count = 0;
-    if (training)
-        logits->zero_grad(streams[0]);
-
-    // iterate over outputs rows (nodes)
-    for (int i = 0; i < data.size() / num_classes; i++)
-    {
-        if (truth[i] < 0) // only train labels
-            continue;
-        count++; // count the number of training nodes (labels)
-        float *logit =
-            &data[i * num_classes]; // output row of the i-th node
-        float max_logit = -1e30, sum_exp = 0;
-        // get the maximum value of each node
-        for (int j = 0; j < num_classes; j++)
-            max_logit = fmax(max_logit, logit[j]);
-        // calculate the loss applying the softmax
-        for (int j = 0; j < num_classes; j++)
-        {
-            logit[j] -= max_logit; // numerical stability
-            sum_exp += expf(logit[j]);
-        }
-        total_loss += logf(sum_exp) - logit[truth[i]]; // eq (10) of the paper ???
-
-        if (training)
-        {
-            for (int j = 0; j < num_classes; j++)
-            {
-                float prob = expf(logit[j]) / sum_exp;
-                grad[i * num_classes + j] = prob;
-            }
-            grad[i * num_classes + truth[i]] -= 1.0;
-        }
-    }
-    logits->dev_data.copy_to_device(data.data());
-
-    *loss = total_loss; //! / count;
-    if (training)
-    {
-        for (float &i : grad)
-            i /= count;
-        logits->dev_grad.copy_to_device(grad.data());
-    }
-    timer_stop(TMR_LOSS_FW);
-}
-*/
 // ##################################################################################
 
 void CrossEntropyLoss::backward() const

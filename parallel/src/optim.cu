@@ -50,7 +50,7 @@ __global__ void adam_step_kernel(real *dev_data, const real *dev_grad, real *dev
 
 void Adam::step()
 {
-    timer_start(TMR_OPTIMIZER);
+    // timer_start(TMR_OPTIMIZER);
 
     step_count++;
     const real step_size = params->learning_rate * sqrtf(1 - powf(params->beta2, step_count)) / (1 - powf(params->beta1, step_count));
@@ -77,7 +77,7 @@ void Adam::step()
 #endif
     }
 
-    timer_stop(TMR_OPTIMIZER);
+    // timer_stop(TMR_OPTIMIZER);
 }
 
 // ##################################################################################

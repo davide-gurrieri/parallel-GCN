@@ -71,6 +71,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     variables.push_back(std::make_shared<Variable>(params->input_dim * params->hidden_dim, true, dev_rand_states));
     shared_ptr<Variable> layer1_weight = variables.back();
     layer1_weight->glorot(params->input_dim, params->hidden_dim);
+    // layer1_weight->set_value(0.5, streams[0]);
     dev_l2 = dev_shared_ptr<real>(1); // used by get_l2_penalty()
     pinned_l2 = pinned_host_ptr<real>(1);
 
@@ -95,6 +96,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     variables.push_back(std::make_shared<Variable>(params->hidden_dim * params->output_dim, true, dev_rand_states));
     shared_ptr<Variable> layer2_weight = variables.back();
     layer2_weight->glorot(params->hidden_dim, params->output_dim);
+    // layer2_weight->set_value(0.5, streams[0]);
 
     modules.push_back(std::make_unique<Matmul>(layer1_var2, layer2_weight, layer2_var1, params->num_nodes, params->hidden_dim, params->output_dim));
 
@@ -115,7 +117,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
 __global__ void initialize_random_kernel(randState *dev_rand_states)
 {
     // curand_init(seed, index, offset, &state);
-    curand_init(SEED, 0, threadIdx.x, &dev_rand_states[threadIdx.x]);
+    curand_init(SEED * threadIdx.x, threadIdx.x, threadIdx.x, &dev_rand_states[threadIdx.x]);
 }
 
 void GCN::initialize_random()
@@ -207,29 +209,9 @@ void GCN::get_l2_penalty(smart_stream stream) const
 #endif
     // cudaStreamSynchronize(streams[0].get());
     dev_l2.copy_to_host_async(pinned_l2.get(), stream);
+
     //! cudaStreamSynchronize(stream.get());
     //! return adam_params->weight_decay * (*pinned_l2) / real(2);
-}
-
-// ##################################################################################
-
-std::pair<real, real> GCN::eval(const natural current_split) const
-{
-#ifdef FEATURE
-    set_input(streams[3], false);
-#endif
-    set_truth(current_split, streams[3]);
-    for (const auto &m : modules)
-        m->forward(false, streams[3]);
-    //! cudaStreamSynchronize(streams[3].get());
-    //!  *loss /= modules.back()->get_num_samples();
-    //! const real test_loss = *loss + get_l2_penalty(streams[3]);
-    //! const real test_acc = get_accuracy(streams[3]);
-    //! cudaStreamSynchronize(streams[3].get());
-    get_l2_penalty(streams[3]);
-    get_accuracy(streams[3]);
-    //! return {test_loss, test_acc};
-    return finalize(streams[3]);
 }
 
 // ##################################################################################
@@ -262,6 +244,27 @@ void GCN::get_accuracy(smart_stream stream) const
     //! cudaStreamSynchronize(stream.get());
     //! const natural total = modules.back()->get_num_samples();
     //! return static_cast<real>(total - *pinned_wrong) / static_cast<real>(total);
+}
+
+// ##################################################################################
+
+std::pair<real, real> GCN::eval(const natural current_split) const
+{
+#ifdef FEATURE
+    set_input(streams[3], false);
+#endif
+    set_truth(current_split, streams[3]);
+    for (const auto &m : modules)
+        m->forward(false, streams[3]);
+    //! cudaStreamSynchronize(streams[3].get());
+    //!  *loss /= modules.back()->get_num_samples();
+    //! const real test_loss = *loss + get_l2_penalty(streams[3]);
+    //! const real test_acc = get_accuracy(streams[3]);
+    //! cudaStreamSynchronize(streams[3].get());
+    get_l2_penalty(streams[3]);
+    get_accuracy(streams[3]);
+    //! return {test_loss, test_acc};
+    return finalize(streams[3]);
 }
 
 // ##################################################################################
@@ -304,6 +307,12 @@ std::pair<real, real> GCN::train_epoch()
     // compute the accuracy comparing the prediction against the truth
     //! const real train_acc = get_accuracy(streams[0]);
     //! return {train_loss, train_acc};
+    /*
+        for (unsigned i = 0; i < variables.size(); i++)
+            variables[i]->save("data" + std::to_string(i + 1) + "a.txt", "data", variables[i]->size);
+        for (unsigned i = 1; i < variables.size(); i++)
+            variables[i]->save("grad" + std::to_string(i + 1) + "a.txt", "grad", variables[i]->size);
+    */
     return finalize(streams[0]);
 }
 
@@ -353,6 +362,7 @@ void GCN::run()
     }
 
     PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
+    /*
     PRINT_TIMER_AVERAGE(TMR_MATMUL_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_MATMUL_BW, epoch);
     PRINT_TIMER_AVERAGE(TMR_SPMATMUL_FW, epoch);
@@ -365,7 +375,7 @@ void GCN::run()
     PRINT_TIMER_AVERAGE(TMR_DROPOUT_BW, epoch);
     PRINT_TIMER_AVERAGE(TMR_LOSS_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_OPTIMIZER, epoch);
-
+*/
     real test_loss, test_acc;
     timer_start(TMR_TEST);
     std::tie(test_loss, test_acc) = eval(3); // eval the model on the test set
