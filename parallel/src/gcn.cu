@@ -18,6 +18,7 @@ void GCNParams::print_info() const
 DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex(gcn_data.graph)), dev_feature_index(DevSparseIndex(gcn_data.feature_index))
 {
     label_size = gcn_data.label.size();
+
 #ifdef FEATURE
     dev_feature_value = dev_shared_ptr<real>(dev_feature_index.indices_size);
 #endif
@@ -55,9 +56,12 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     // dropout
     variables.push_back(std::make_shared<Variable>(data_->feature_index.indices.size(), false));
     input = variables.back();
+    set_input(streams[0], true);
     modules.push_back(std::make_unique<Dropout>(input, params->dropout_input, dev_rand_states));
 #else
-    input = std::make_shared<Variable>();
+    // for compatibility
+    variables.push_back(std::make_shared<Variable>());
+    input = variables.back();
 #endif
 
     // sparse matmul

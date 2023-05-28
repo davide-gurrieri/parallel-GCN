@@ -2,8 +2,8 @@
 # Parameters for GCN
 #-------------------------------------------------
 hidden_dim = 16
-dropout_input = 0.0
-dropout_layer1 = 0.3
+dropout_input = 0.5
+dropout_layer1 = 0.5
 epochs = 100
 early_stopping = 0
 

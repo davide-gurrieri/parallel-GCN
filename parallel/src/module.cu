@@ -121,8 +121,10 @@ __global__ void sparse_matmul_kernel_forward(const real *a, const real *b, real 
         for (natural jj = indptr[row]; jj < indptr[row + 1]; jj++)
 #ifdef FEATURE
             sum += a[jj] * b[indices[jj] * p + col];
+            // atomicAdd(&c[i], a[jj] * b[indices[jj] * p + col]);
 #else
             sum += b[indices[jj] * p + col];
+            // atomicAdd(&c[i], b[indices[jj] * p + col]);
 #endif
         c[i] = sum;
     }
@@ -174,7 +176,9 @@ void SparseMatmul::backward() const
     b->zero_grad(streams[1]);
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
     sparse_matmul_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
+#ifdef FEATURE
     cudaEventRecord(events[2].get(), streams[1].get());
+#endif
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
