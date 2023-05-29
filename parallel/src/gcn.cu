@@ -320,6 +320,7 @@ std::pair<real, real> GCN::train_epoch()
 
 void GCN::run()
 {
+    timer_start(TMR_TOTAL);
     natural epoch = 1;
     // real total_time = 0.0;
     std::vector<real> loss_history;
@@ -360,6 +361,7 @@ void GCN::run()
             }
         }
     }
+    timer_stop(TMR_TOTAL);
 
     PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
     /*
@@ -380,6 +382,7 @@ void GCN::run()
     timer_start(TMR_TEST);
     std::tie(test_loss, test_acc) = eval(3); // eval the model on the test set
     printf("test_loss=%.5f test_acc=%.5f time=%.5f\n", test_loss, test_acc, timer_stop(TMR_TEST));
+    std::cout << "total time: " << timer_total(TMR_TOTAL) << std::endl;
 }
 
 // ##################################################################################
