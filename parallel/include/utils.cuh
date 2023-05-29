@@ -1,60 +1,22 @@
 #ifndef UTILS_CUH
 #define UTILS_CUH
-#include <iostream>
 #include <cmath>
-#include <curand_kernel.h>
-// #include <cuda_fp16.h>
 #include <cuda_runtime.h>
-
-// * for std::accumulate
-#include <numeric>
-
-// Aliases
-// using valueType = float;
-// using indexType = size_t;
+#include <curand_kernel.h>
+#include <iostream>
 
 using natural = unsigned;
 using integer = int;
 using real = float;
-// using randState = curandStatePhilox4_32_10_t;
 using randState = curandState_t;
+// using randState = curandStatePhilox4_32_10_t;
 
-// #define indexType int
-
-// Variables
-/*
-namespace cudaParams
-{
-    natural N_THREADS = 512;
-    natural N_THREADS
-    natural N_BLOCKS = 128;
-    natural TILE_DIM = 8;
-}
-*/
-constexpr natural N_THREADS = 1024;
-constexpr natural N_THREADS_DROPOUT = 1024;
-constexpr natural N_BLOCKS = 128; // 8 * 16 with 16 number of SM (multiProcessorCount)
+inline natural N_THREADS = 1024;
+// constexpr natural N_THREADS_DROPOUT = 1024;
+inline natural N_BLOCKS =
+    128; // 8 * 16 with 16 number of SM (multiProcessorCount)
 constexpr natural TILE_DIM = 16;
-constexpr natural TILE_DIM2 = 32;
 constexpr natural SEED = 42;
-
-/*
-#define N_THREADS 1024
-#define N_THREADS_DROPOUT 512
-#define N_BLOCKS 128 // 8 * 16 with 16 number of SM (multiProcessorCount)
-#define TILE_DIM 16
-// #define TILE_DIM_Y 32 // 128
-// #define TILE_DIM_X 32 // 8
-#define SEED 42
-*/
-
-// #define CHECK_CUDA_ERROR(val) nothing((val))
-/*
-template <typename T>
-void nothing(T err)
-{
-}
-*/
 
 #ifdef DEBUG_CUDA
 
@@ -62,15 +24,12 @@ void nothing(T err)
 
 template <typename T>
 void check(T err, const char *const func, const char *const file,
-           const int line)
-{
-    if (err != cudaSuccess)
-    {
-        std::cerr << "CUDA Runtime Error at: " << file << ":" << line
-                  << std::endl;
-        std::cerr << cudaGetErrorString(err) << " " << func << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
+           const int line) {
+  if (err != cudaSuccess) {
+    std::cerr << "CUDA Runtime Error at: " << file << ":" << line << std::endl;
+    std::cerr << cudaGetErrorString(err) << " " << func << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 #endif
 
@@ -79,6 +38,8 @@ void check(T err, const char *const func, const char *const file,
  */
 #define CEIL(M, N) (((M) + (N)-1) / (N))
 
+// Debugging functions
+/*
 #include "../include/shared_ptr.cuh"
 template <class T>
 void print_gpu(dev_shared_ptr<T> dev_data, natural size, natural col)
@@ -109,24 +70,34 @@ inline void print_cpu(const std::vector<real> &v, natural col)
             printf("\n");
     }
 }
+*/
 
-inline void print_gpu_info()
-{
-    int dev;
-    cudaDeviceProp devProp;                 // C struct
-    cudaGetDevice(&dev);                    // Get the id of the currently used device
-    cudaGetDeviceProperties(&devProp, dev); // Get the device properties
-    std::cout << std::endl;
-    std::cout << "GPU INFORMATIONS:" << std::endl;
-    std::cout << "multiProcessorCount: " << devProp.multiProcessorCount << std::endl;
-    std::cout << "maxBlocksPerMultiProcessor: " << devProp.maxBlocksPerMultiProcessor << std::endl;
-    std::cout << "maxThreadsPerMultiProcessor: " << devProp.maxThreadsPerMultiProcessor << std::endl;
-    std::cout << "maxThreadsPerBlock: " << devProp.maxThreadsPerBlock << std::endl;
-    std::cout << "warpSize: " << devProp.warpSize << std::endl;
-    std::cout << "sharedMemPerBlock [KB]: " << devProp.sharedMemPerBlock / 1024 << std::endl;
-    std::cout << "sharedMemPerMultiprocessor [KB]: " << devProp.sharedMemPerMultiprocessor / 1024 << std::endl;
-    std::cout << "totalGlobalMem [MB]: " << devProp.totalGlobalMem / 1048576 << std::endl;
-    std::cout << std::endl;
+inline natural print_gpu_info() {
+  int dev;
+  cudaDeviceProp devProp; // C struct
+  cudaGetDevice(&dev);    // Get the id of the currently used device
+  cudaGetDeviceProperties(&devProp, dev); // Get the device properties
+#ifndef TUNE
+  std::cout << std::endl;
+  std::cout << "GPU INFORMATIONS:" << std::endl;
+  std::cout << "multiProcessorCount: " << devProp.multiProcessorCount
+            << std::endl;
+  std::cout << "maxBlocksPerMultiProcessor: "
+            << devProp.maxBlocksPerMultiProcessor << std::endl;
+  std::cout << "maxThreadsPerMultiProcessor: "
+            << devProp.maxThreadsPerMultiProcessor << std::endl;
+  std::cout << "maxThreadsPerBlock: " << devProp.maxThreadsPerBlock
+            << std::endl;
+  std::cout << "warpSize: " << devProp.warpSize << std::endl;
+  std::cout << "sharedMemPerBlock [KB]: " << devProp.sharedMemPerBlock / 1024
+            << std::endl;
+  std::cout << "sharedMemPerMultiprocessor [KB]: "
+            << devProp.sharedMemPerMultiprocessor / 1024 << std::endl;
+  std::cout << "totalGlobalMem [MB]: " << devProp.totalGlobalMem / 1048576
+            << std::endl;
+  std::cout << std::endl;
+#endif
+  return devProp.multiProcessorCount;
 }
 
 #endif

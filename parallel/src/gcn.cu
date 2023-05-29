@@ -209,9 +209,6 @@ void GCN::get_l2_penalty(smart_stream stream) const
 #endif
     // cudaStreamSynchronize(streams[0].get());
     dev_l2.copy_to_host_async(pinned_l2.get(), stream);
-
-    //! cudaStreamSynchronize(stream.get());
-    //! return adam_params->weight_decay * (*pinned_l2) / real(2);
 }
 
 // ##################################################################################
@@ -241,9 +238,6 @@ void GCN::get_accuracy(smart_stream stream) const
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
     dev_wrong.copy_to_host_async(pinned_wrong.get(), stream);
-    //! cudaStreamSynchronize(stream.get());
-    //! const natural total = modules.back()->get_num_samples();
-    //! return static_cast<real>(total - *pinned_wrong) / static_cast<real>(total);
 }
 
 // ##################################################################################
@@ -256,14 +250,9 @@ std::pair<real, real> GCN::eval(const natural current_split) const
     set_truth(current_split, streams[3]);
     for (const auto &m : modules)
         m->forward(false, streams[3]);
-    //! cudaStreamSynchronize(streams[3].get());
-    //!  *loss /= modules.back()->get_num_samples();
-    //! const real test_loss = *loss + get_l2_penalty(streams[3]);
-    //! const real test_acc = get_accuracy(streams[3]);
-    //! cudaStreamSynchronize(streams[3].get());
+
     get_l2_penalty(streams[3]);
     get_accuracy(streams[3]);
-    //! return {test_loss, test_acc};
     return finalize(streams[3]);
 }
 
@@ -299,20 +288,6 @@ std::pair<real, real> GCN::train_epoch()
         std::cout << "output" << std::endl;
         variables[6]->print(params->output_dim);
     */
-
-    //! cudaStreamSynchronize(streams[0].get());
-    //!  *loss /= modules.back()->get_num_samples();
-    // correct the loss with the l2 regularization
-    //! const real train_loss = *loss + get_l2_penalty(streams[0]);
-    // compute the accuracy comparing the prediction against the truth
-    //! const real train_acc = get_accuracy(streams[0]);
-    //! return {train_loss, train_acc};
-    /*
-        for (unsigned i = 0; i < variables.size(); i++)
-            variables[i]->save("data" + std::to_string(i + 1) + "a.txt", "data", variables[i]->size);
-        for (unsigned i = 1; i < variables.size(); i++)
-            variables[i]->save("grad" + std::to_string(i + 1) + "a.txt", "grad", variables[i]->size);
-    */
     return finalize(streams[0]);
 }
 
@@ -337,11 +312,12 @@ void GCN::run()
         real val_loss{0.f}, val_acc{0.f};
         // eval the model at the current step in order to obtain the val_loss and val_accuracy
         std::tie(val_loss, val_acc) = eval(2);
-
-        // cudaDeviceSynchronize();
-
+#ifndef TUNE
         printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f time=%.5f\n",
                epoch, train_loss, train_acc, val_loss, val_acc, timer_stop(TMR_TRAIN));
+#else
+        timer_stop(TMR_TRAIN);
+#endif
 
         if (params->early_stopping > 0)
         {
@@ -362,8 +338,12 @@ void GCN::run()
         }
     }
     timer_stop(TMR_TOTAL);
-
+#ifndef TUNE
     PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
+#else
+    PRINT_TIMER_AVERAGE_TUNE(TMR_TRAIN, epoch);
+#endif
+
     /*
     PRINT_TIMER_AVERAGE(TMR_MATMUL_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_MATMUL_BW, epoch);
@@ -377,12 +357,14 @@ void GCN::run()
     PRINT_TIMER_AVERAGE(TMR_DROPOUT_BW, epoch);
     PRINT_TIMER_AVERAGE(TMR_LOSS_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_OPTIMIZER, epoch);
-*/
+    */
     real test_loss, test_acc;
     timer_start(TMR_TEST);
     std::tie(test_loss, test_acc) = eval(3); // eval the model on the test set
+#ifndef TUNE
     printf("test_loss=%.5f test_acc=%.5f time=%.5f\n", test_loss, test_acc, timer_stop(TMR_TEST));
-    std::cout << "total time: " << timer_total(TMR_TOTAL) << std::endl;
+    std::cout << "total time training + validation: " << timer_total(TMR_TOTAL) << std::endl;
+#endif
 }
 
 // ##################################################################################
@@ -391,13 +373,14 @@ std::pair<real, real> GCN::finalize(smart_stream stream) const
 {
     // syncronize the stream
     cudaStreamSynchronize(stream.get());
+    const natural total = modules.back()->get_num_samples();
+
     // loss
-    *loss /= modules.back()->get_num_samples();
+    *loss /= total;
     real l2 = adam_params->weight_decay * (*pinned_l2) / real(2);
     const real final_loss = *loss + l2;
 
     // accuracy
-    const natural total = modules.back()->get_num_samples();
     const real final_accuracy = static_cast<real>(total - *pinned_wrong) / static_cast<real>(total);
     return {final_loss, final_accuracy};
 }

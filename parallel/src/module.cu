@@ -16,7 +16,7 @@ Dropout::Dropout(shared_ptr<Variable> in_, real p_, dev_shared_ptr<randState> de
 __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, const randState *dev_rand_states,
                                        const natural size, const real p, const real scale)
 {
-    __shared__ randState s_rand_states[N_THREADS_DROPOUT];
+    extern __shared__ randState s_rand_states[];
     s_rand_states[threadIdx.x] = dev_rand_states[threadIdx.x];
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
@@ -32,9 +32,9 @@ __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, const ran
 // needs curandStatePhilox4_32_10_t
 /*
 __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, const randState *dev_rand_states,
-                                       const natural size, const real p, const real scale)
+                                       const natural size, const real p, const real scale, const natural n_threads)
 {
-    __shared__ randState s_rand_states[N_THREADS_DROPOUT];
+    __shared__ randState s_rand_states[n_threads];
     s_rand_states[threadIdx.x] = dev_rand_states[threadIdx.x];
     natural id = 4 * (blockIdx.x * blockDim.x + threadIdx.x);
 
@@ -64,8 +64,8 @@ void Dropout::forward(bool training, smart_stream stream) const
 
     // timer_start(TMR_DROPOUT_FW);
     const real scale = 1.0 / (1.0 - p);
-    const natural n_blocks = std::min(CEIL(in->size, N_THREADS_DROPOUT), N_BLOCKS);
-    dropout_kernel_forward<<<n_blocks, N_THREADS_DROPOUT, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
+    const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
+    dropout_kernel_forward<<<n_blocks, N_THREADS, N_THREADS * sizeof(randState), stream.get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -89,13 +89,14 @@ void Dropout::backward() const
         return;
 
     // timer_start(TMR_DROPOUT_BW);
+
     const real scale = 1.0 / (1.0 - p);
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
     dropout_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
+
     // timer_stop(TMR_DROPOUT_BW);
 }
 
@@ -131,8 +132,7 @@ void SparseMatmul::forward(bool training, smart_stream stream) const
     // timer_start(TMR_SPMATMUL_FW);
 
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
-    if (!training)
-        cudaStreamWaitEvent(stream.get(), events[0].get());
+    cudaStreamWaitEvent(stream.get(), events[0].get());
     sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -314,7 +314,7 @@ __global__ void matmul_kernel_forward(const real *a, const real *b, real *c, con
     natural tx = threadIdx.x;
     natural ty = threadIdx.y;
 #pragma unroll
-    for (natural row = blockIdx.y * TILE_DIM + ty; row < m; row += blockDim.y * gridDim.y)
+    for (natural row = blockIdx.y * blockDim.x + ty; row < m; row += blockDim.y * gridDim.y)
     {
         natural col = blockIdx.x * TILE_DIM + tx;
         //  number of tile rows/columns needed to cover the matrices A and B
@@ -361,8 +361,7 @@ void Matmul::forward(bool training, smart_stream stream) const
     const natural n_blocks_y = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
     const dim3 n_blocks(CEIL(p, TILE_DIM), n_blocks_y);
     const dim3 n_threads(TILE_DIM, TILE_DIM);
-    if (!training)
-        cudaStreamWaitEvent(stream.get(), events[1].get());
+    cudaStreamWaitEvent(stream.get(), events[1].get());
     matmul_kernel_forward<<<n_blocks, n_threads, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -381,7 +380,7 @@ __global__ void matmul_kernel_backward_1(real *a, const real *b, const real *c, 
     natural tx = threadIdx.x;
     natural ty = threadIdx.y;
 #pragma unroll
-    for (natural row = blockIdx.y * TILE_DIM + ty; row < m; row += blockDim.y * gridDim.y)
+    for (natural row = blockIdx.y * blockDim.x + ty; row < m; row += blockDim.y * gridDim.y)
     {
         natural col = blockIdx.x * TILE_DIM + tx;
         //  number of tile rows/columns needed to cover the matrices A and B
@@ -420,7 +419,7 @@ __global__ void matmul_kernel_backward_1(real *a, const real *b, const real *c, 
     }
 }
 
-// 2 versione con loop lungo e shared memory
+// second version with long internal loop abd shared memory
 /*
 __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
 {
@@ -483,7 +482,7 @@ void Matmul::backward() const
 }
 */
 
-// versione con atomicAdd
+// first version with atomicAdd
 
 __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
 {

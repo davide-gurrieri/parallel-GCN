@@ -12,7 +12,7 @@
 int main(int argc, char **argv) {
 
   // Print device informations
-  print_gpu_info();
+  natural multiProcessorCount = print_gpu_info();
 
   if (argc < 2) {
     std::cerr
@@ -25,6 +25,7 @@ int main(int argc, char **argv) {
   // Read parameters at runtime from "parameters.txt" using GetPot
   GCNParams params;
   AdamParams adam_params;
+  CudaParams cuda_params;
   GetPot command_line(argc, argv);
   const std::string file_name = command_line("file", "./parameters.txt");
   GetPot datafile(file_name.c_str());
@@ -40,9 +41,20 @@ int main(int argc, char **argv) {
   adam_params.beta1 = datafile("beta1", 0.0);
   adam_params.beta2 = datafile("beta2", 0.0);
   adam_params.eps = datafile("eps", 0.0);
+  // CudaParams
+  /*
+  cuda_params.num_blocks_factor =
+      datafile("num_blocks_factor", 0) * multiProcessorCount;
+  cuda_params.num_threads = datafile("num_threads", 0);
+  cuda_params.tile_dim = datafile("tile_dim", 0);
+  */
+  N_BLOCKS = datafile("num_blocks_factor", 0) * multiProcessorCount;
+  N_THREADS = datafile("num_threads", 0);
+
 #else
   GCNParams params;
   constexpr AdamParams adam_params;
+  constexpr CudaParams cuda_params;
 #endif
 
   // Parse data
@@ -54,8 +66,10 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-  // print parsed parameters
+// print parsed parameters
+#ifndef TUNE
   params.print_info();
+#endif
 
   // GCN object creation
   GCN gcn(&params, &adam_params, &data);

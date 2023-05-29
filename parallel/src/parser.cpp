@@ -156,13 +156,21 @@ void vprint(std::vector<int> v) {
 bool Parser::parse() {
   if (!isValidInput())
     return false;
+#ifndef TUNE
   std::cout << "PARSING DATA ..." << std::endl;
+#endif
   this->parseGraph();
+#ifndef TUNE
   std::cout << "Parse Graph Succeeded." << std::endl;
+#endif
   this->parseNode();
+#ifndef TUNE
   std::cout << "Parse Node Succeeded." << std::endl;
+#endif
   this->parseSplit();
+#ifndef TUNE
   std::cout << "Parse Split Succeeded." << std::endl;
+#endif
   this->calculateGraphValues();
   return true;
 }

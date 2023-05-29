@@ -31,6 +31,13 @@ struct GCNParams
 
 // ##################################################################################
 
+struct CudaParams
+{
+  natural num_blocks_factor{8}, num_threads{1024}, tile_dim{16};
+};
+
+// ##################################################################################
+
 struct GCNData
 {
   SparseIndex feature_index, graph;
@@ -90,8 +97,6 @@ class GCN
   std::pair<real, real> eval(const natural current_split) const;
 
 public:
-  // std::vector<smart_object<cudaStream_t>> streams;
-  // std::vector<smart_object<cudaStream_t>> events;
   const GCNParams *params;
   const AdamParams *adam_params;
   GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_);

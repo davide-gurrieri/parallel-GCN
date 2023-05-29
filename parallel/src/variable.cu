@@ -25,7 +25,7 @@ __global__ void glorot_kernel(real *data, const natural size, const double scale
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
     for (natural i = id; i < size; i += blockDim.x * gridDim.x)
-        data[i] = (curand_uniform(&state[i % N_THREADS]) - 0.5) * scale;
+        data[i] = (curand_uniform(&state[i % blockDim.x]) - 0.5) * scale;
 }
 
 void Variable::glorot(const natural in_size, const natural out_size) const

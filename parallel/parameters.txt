@@ -4,7 +4,7 @@
 hidden_dim = 16
 dropout_input = 0.5
 dropout_layer1 = 0.5
-epochs = 100
+epochs = 5
 early_stopping = 0
 
 #-------------------------------------------------
@@ -16,3 +16,8 @@ beta1 = 0.9
 beta2 = 0.999
 eps = 1e-8
 
+#-------------------------------------------------
+# Parameters for Cuda
+#-------------------------------------------------
+num_blocks_factor = 16
+num_threads = 1024
