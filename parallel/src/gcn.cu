@@ -54,6 +54,10 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     dev_l2_eval = dev_shared_ptr<real>(1);    // used by get_l2_penalty()
     dev_loss_eval = dev_shared_ptr<real>(1);
 
+    dev_loss_history = dev_shared_ptr<real>(params->epochs);
+    dev_interrupt = dev_shared_ptr<natural>(1);
+    dev_interrupt.set_zero(streams[0]);
+
     modules.reserve(8);
     variables.reserve(7);
 
@@ -315,12 +319,29 @@ void GCN::train_epoch()
 
 // ##################################################################################
 
+__global__ void early_stopping_kernel(real *dev_loss_history, const real *dev_loss_eval, const natural epoch, const natural early_stopping, natural *interrupt)
+{
+    if (threadIdx.x == 0)
+    {
+        dev_loss_history[epoch - 1] = *dev_loss_eval;
+        if (epoch >= early_stopping)
+        {
+            real recent_loss = 0.0;
+            for (natural i = epoch - early_stopping; i < epoch; i++)
+                recent_loss += dev_loss_history[i];
+            if (*dev_loss_eval > recent_loss / static_cast<real>(early_stopping))
+            {
+                printf("Early stopping...\n");
+                *interrupt = 1;
+            }
+        }
+    }
+}
+
 void GCN::run()
 {
     timer_start(TMR_TOTAL);
     natural epoch = 1;
-    std::vector<real> loss_history;
-    loss_history.reserve(params->epochs);
     // Iterate the training process based on the selected number of epoch
     for (; epoch <= params->epochs; epoch++)
     {
@@ -332,35 +353,27 @@ void GCN::run()
         eval(2, false);
         finalize_kernel<<<1, 2, 0, streams[3].get()>>>(dev_l2_eval.get(), dev_loss_eval.get(), dev_wrong_eval.get(), params->val_dim, adam_params->weight_decay);
 
-        /*
-                if (params->early_stopping > 0)
-                {
-                    // record the validation loss in order to apply an early stopping mechanism
-                    loss_history.push_back(val_loss);
-                    // early stopping mechanism
-                    if (epoch >= params->early_stopping)
-                    {
-                        real recent_loss = 0.0;
-                        for (natural i = epoch - params->early_stopping; i < epoch; i++)
-                            recent_loss += loss_history[i];
-                        if (val_loss > recent_loss / static_cast<real>(params->early_stopping))
-                        {
-                            printf("Early stopping...\n");
-                            break;
-                        }
-                    }
-                }
-        */
         cudaStreamWaitEvent(streams[3].get(), events[13].get());
         print<<<1, 1, 0, streams[3].get()>>>(dev_loss_train.get(), dev_wrong_train.get(), dev_loss_eval.get(), dev_wrong_eval.get(), epoch);
+
+        if (params->early_stopping > 0)
+        {
+            early_stopping_kernel<<<1, 1, 0, streams[3].get()>>>(dev_loss_history.get(), dev_loss_eval.get(), epoch, params->early_stopping, dev_interrupt.get());
+            natural interrupt = 0;
+            dev_interrupt.copy_to_host_async(&interrupt, streams[3]);
+            cudaStreamSynchronize(streams[3].get());
+            if (interrupt)
+                break;
+        }
     }
 
+    cudaDeviceSynchronize();
     timer_stop(TMR_TOTAL);
 
     eval(3, false); // eval the model on the test set
     finalize_kernel<<<1, 2, 0, streams[3].get()>>>(dev_l2_eval.get(), dev_loss_eval.get(), dev_wrong_eval.get(), params->test_dim, adam_params->weight_decay);
     print_test<<<1, 1, 0, streams[3].get()>>>(dev_loss_eval.get(), dev_wrong_eval.get());
-    cudaDeviceSynchronize();
+
     std::cout << "total time: " << timer_total(TMR_TOTAL) << std::endl;
 }
 

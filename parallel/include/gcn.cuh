@@ -77,6 +77,8 @@ class GCN
   dev_shared_ptr<real> dev_l2_eval;     // used by get_l2_penalty()
   dev_shared_ptr<real> dev_loss_eval;
   dev_shared_ptr<real> dev_wrong_eval; // used by get_accuracy()
+  dev_shared_ptr<real> dev_loss_history;
+  dev_shared_ptr<natural> dev_interrupt;
 
   void initialize_random();
 #ifdef FEATURE
