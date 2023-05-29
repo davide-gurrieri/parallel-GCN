@@ -120,11 +120,13 @@ class CrossEntropyLoss : public Module
     dev_shared_ptr<integer> dev_truth;
     pinned_host_ptr<real> loss;
     natural num_classes;
-    dev_shared_ptr<real> dev_loss_res;
+    // dev_shared_ptr<real> dev_loss_res;
+    dev_shared_ptr<real> dev_loss_train;
+    dev_shared_ptr<real> dev_loss_eval;
 
 public:
     natural num_samples;
-    CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, pinned_host_ptr<real> loss_, natural num_classes_);
+    CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, pinned_host_ptr<real> loss_, natural num_classes_, dev_shared_ptr<real> dev_loss_train_, dev_shared_ptr<real> dev_loss_eval_);
     ~CrossEntropyLoss(){};
     void set_num_samples(natural num_samples_);
     natural get_num_samples() const;

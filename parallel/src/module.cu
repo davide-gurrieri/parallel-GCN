@@ -527,10 +527,7 @@ void Matmul::backward() const
 // CROSSENTROPYLOSS
 // ##################################################################################
 
-CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, pinned_host_ptr<real> loss_, natural num_classes_) : logits(logits_), dev_truth(dev_truth_), loss(loss_), num_classes(num_classes_)
-{
-    dev_loss_res = dev_shared_ptr<real>(1);
-}
+CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, pinned_host_ptr<real> loss_, natural num_classes_, dev_shared_ptr<real> dev_loss_train_, dev_shared_ptr<real> dev_loss_eval_) : logits(logits_), dev_truth(dev_truth_), loss(loss_), num_classes(num_classes_), dev_loss_train(dev_loss_train_), dev_loss_eval(dev_loss_eval_) {}
 
 // ##################################################################################
 
@@ -584,16 +581,18 @@ void CrossEntropyLoss::forward(bool training, smart_stream stream) const
     if (training)
         logits->zero_grad(stream);
 
-    dev_loss_res.set_zero(stream);
+    dev_shared_ptr<real> dev_loss = training ? dev_loss_train : dev_loss_eval;
+    dev_loss.set_zero(stream);
+
     const natural DIM = logits->size / num_classes;
     const natural n_blocks = std::min(CEIL(DIM, N_THREADS), N_BLOCKS);
-    cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss_res.get(), num_classes, DIM, num_samples, training);
+    cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss.get(), num_classes, DIM, num_samples, training);
     if (training)
         cudaEventRecord(events[3].get(), stream.get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    dev_loss_res.copy_to_host_async(loss.get(), stream);
+    // dev_loss_res.copy_to_host_async(loss.get(), stream);
 
     // timer_stop(TMR_LOSS_FW);
 }

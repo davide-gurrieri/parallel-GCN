@@ -71,8 +71,13 @@ class GCN
   Adam optimizer;
   dev_shared_ptr<randState> dev_rand_states;
   dev_shared_ptr<integer> dev_truth;
-  dev_shared_ptr<real> dev_l2;       // used by get_l2_penalty()
-  dev_shared_ptr<natural> dev_wrong; // used by get_accuracy()
+  dev_shared_ptr<real> dev_l2_train; // used by get_l2_penalty()
+  dev_shared_ptr<real> dev_loss_train;
+  dev_shared_ptr<real> dev_wrong_train; // used by get_accuracy()
+  dev_shared_ptr<real> dev_l2_eval;     // used by get_l2_penalty()
+  dev_shared_ptr<real> dev_loss_eval;
+  dev_shared_ptr<real> dev_wrong_eval; // used by get_accuracy()
+
   pinned_host_ptr<real> pinned_l2;
   pinned_host_ptr<real> loss;
   pinned_host_ptr<natural> pinned_wrong;
@@ -83,11 +88,11 @@ class GCN
 #endif
   void set_truth(const natural current_split, smart_stream stream) const;
 
-  void get_accuracy(smart_stream stream) const;
-  void get_l2_penalty(smart_stream stream) const;
-  std::pair<real, real> finalize(smart_stream stream) const;
-  std::pair<real, real> train_epoch();
-  std::pair<real, real> eval(const natural current_split) const;
+  void get_accuracy(smart_stream stream, bool training) const;
+  void get_l2_penalty(smart_stream stream, bool training) const;
+  void finalize(smart_stream stream1, smart_stream stream2, natural epoch, bool test) const;
+  void train_epoch();
+  void eval(const natural current_split, const natural epoch) const;
 
 public:
   // std::vector<smart_object<cudaStream_t>> streams;
