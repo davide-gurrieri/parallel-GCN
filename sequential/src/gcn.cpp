@@ -8,9 +8,7 @@
  * Returns the default paramets of the model
  * they will be overwritten by the parser when reading the dataset
  */
-GCNParams
-GCNParams::get_default()
-{
+GCNParams GCNParams::get_default() {
   /*
   return { // citeseer
       3327,   // num_nodes
@@ -26,18 +24,17 @@ GCNParams::get_default()
   */
 
   ///*
-  return {       // CORA
-           2708, // num_nodes
-           1433, // input_dim
-           16,   // hidden_dim
-           7,    // output_dim
-           0.5,  // dropouyt
-           0.01, // learning_rate
-           5e-4, // weight_decay
-           100,  // epochs
-           0
-  }; // early_stopping
-     //*/
+  return {      // CORA
+          2708, // num_nodes
+          1433, // input_dim
+          16,   // hidden_dim
+          7,    // output_dim
+          0.5,  // dropouyt
+          0.01, // learning_rate
+          5e-4, // weight_decay
+          100,  // epochs
+          0};   // early_stopping
+                //*/
 
   /*return { // PUBMED
       19717,   // num_nodes
@@ -51,8 +48,7 @@ GCNParams::get_default()
       0};     // early_stopping*/
 }
 
-GCN::GCN(GCNParams params, GCNData* input_data)
-{
+GCN::GCN(GCNParams params, GCNData *input_data) {
   init_rand_state();
   this->params = params;
   data = input_data;
@@ -64,26 +60,22 @@ GCN::GCN(GCNParams params, GCNData* input_data)
   // dropout
   modules.push_back(new Dropout(input, params.dropout));
   variables.emplace_back(params.num_nodes * params.hidden_dim);
-  Variable* layer1_var1 = &variables.back();
+  Variable *layer1_var1 = &variables.back();
   variables.emplace_back(params.input_dim * params.hidden_dim, true, true);
-  Variable* layer1_weight = &variables.back();
+  Variable *layer1_weight = &variables.back();
   layer1_weight->glorot(params.input_dim,
                         params.hidden_dim); // weights initilization
 
   // sparsematmul
-  modules.push_back(new SparseMatmul(input,
-                                     layer1_weight,
-                                     layer1_var1,
-                                     &data->feature_index,
-                                     params.num_nodes,
-                                     params.input_dim,
-                                     params.hidden_dim));
+  modules.push_back(new SparseMatmul(input, layer1_weight, layer1_var1,
+                                     &data->feature_index, params.num_nodes,
+                                     params.input_dim, params.hidden_dim));
   variables.emplace_back(params.num_nodes * params.hidden_dim);
-  Variable* layer1_var2 = &variables.back();
+  Variable *layer1_var2 = &variables.back();
 
   // graphsum
   modules.push_back(
-    new GraphSum(layer1_var1, layer1_var2, &data->graph, params.hidden_dim));
+      new GraphSum(layer1_var1, layer1_var2, &data->graph, params.hidden_dim));
 
   // RELU
   modules.push_back(new ReLU(layer1_var2));
@@ -91,30 +83,27 @@ GCN::GCN(GCNParams params, GCNData* input_data)
   // dropout
   modules.push_back(new Dropout(layer1_var2, params.dropout));
   variables.emplace_back(params.num_nodes * params.output_dim);
-  Variable* layer2_var1 = &variables.back();
+  Variable *layer2_var1 = &variables.back();
   variables.emplace_back(params.hidden_dim * params.output_dim, true, true);
-  Variable* layer2_weight = &variables.back();
+  Variable *layer2_weight = &variables.back();
   layer2_weight->glorot(params.hidden_dim,
                         params.output_dim); // weights initilization
 
   // dense matrix multiply
-  modules.push_back(new Matmul(layer1_var2,
-                               layer2_weight,
-                               layer2_var1,
-                               params.num_nodes,
-                               params.hidden_dim,
+  modules.push_back(new Matmul(layer1_var2, layer2_weight, layer2_var1,
+                               params.num_nodes, params.hidden_dim,
                                params.output_dim));
   variables.emplace_back(params.num_nodes * params.output_dim);
   output = &variables.back();
 
   // graph sum
   modules.push_back(
-    new GraphSum(layer2_var1, output, &data->graph, params.output_dim));
+      new GraphSum(layer2_var1, output, &data->graph, params.output_dim));
   truth = std::vector<int>(params.num_nodes);
 
   // cross entropy loss
   modules.push_back(
-    new CrossEntropyLoss(output, truth.data(), &loss, params.output_dim));
+      new CrossEntropyLoss(output, truth.data(), &loss, params.output_dim));
 
   // Adam optimization algorithm (alternative to the classical stochastic
   // gradient descent)
@@ -122,37 +111,30 @@ GCN::GCN(GCNParams params, GCNData* input_data)
   adam_params.lr = params.learning_rate;
   adam_params.weight_decay = params.weight_decay;
   optimizer =
-    Adam({ { layer1_weight, true }, { layer2_weight, false } }, adam_params);
+      Adam({{layer1_weight, true}, {layer2_weight, false}}, adam_params);
 }
 
-GCN::~GCN()
-{
+GCN::~GCN() {
   for (auto m : modules)
     delete m;
 }
 
 // set the current input for the GCN model
-void
-GCN::set_input()
-{
+void GCN::set_input() {
   for (int i = 0; i < input->data.size(); i++)
     input->data[i] = data->feature_value[i];
 }
 
 // set the label of each node inside of the current_split
 // (validation/train/test)
-void
-GCN::set_truth(int current_split)
-{
+void GCN::set_truth(int current_split) {
   for (int i = 0; i < params.num_nodes; i++)
     // truth[i] is the real label of "i"
     truth[i] = data->split[i] == current_split ? data->label[i] : -1;
 }
 
 // get the current accuracy of the model
-float
-GCN::get_accuracy()
-{
+float GCN::get_accuracy() {
   int wrong = 0, total = 0;
   // iterate over training nodes
   for (int i = 0; i < params.num_nodes; i++) {
@@ -173,9 +155,7 @@ GCN::get_accuracy()
 
 // reduce the likelihood of model overfitting by using l2 regularization
 // why is applied only to layer1_weight ???
-float
-GCN::get_l2_penalty()
-{
+float GCN::get_l2_penalty() {
   float l2 = 0;
   for (int i = 0; i < variables[2].data.size(); i++) {
     float x = variables[2].data[i];
@@ -187,9 +167,7 @@ GCN::get_l2_penalty()
 /**
  * Train an epoch of the model
  */
-std::pair<float, float>
-GCN::train_epoch()
-{
+std::pair<float, float> GCN::train_epoch() {
   set_input(); // set the input data
 
   set_truth(1); // get the true labels for the dataset with split == 1 (train)
@@ -198,7 +176,7 @@ GCN::train_epoch()
     m->forward(true);    // true means train
 
   float train_loss =
-    loss + get_l2_penalty(); // correct the loss with the l2 regularization
+      loss + get_l2_penalty(); // correct the loss with the l2 regularization
   float train_acc = get_accuracy(); // compute the accuracy comparing the
                                     // prediction against the truth
   for (int i = modules.size() - 1; i >= 0; i--)
@@ -206,28 +184,25 @@ GCN::train_epoch()
 
   optimizer.step(); // apply a step of the adam optimization
 
-  return { train_loss, train_acc };
+  return {train_loss, train_acc};
 }
 
 /**
  * current_split == 2 --> validation
  * current_split == 3 --> test
  */
-std::pair<float, float>
-GCN::eval(int current_split)
-{
+std::pair<float, float> GCN::eval(int current_split) {
   set_input();
   set_truth(current_split);
   for (auto m : modules)
     m->forward(false);
   float test_loss = loss + get_l2_penalty();
   float test_acc = get_accuracy();
-  return { test_loss, test_acc };
+  return {test_loss, test_acc};
 }
 
-void
-GCN::run()
-{
+void GCN::run() {
+  timer_start(TMR_TOTAL);
   int epoch = 1;
   float total_time = 0.0;
   std::vector<float> loss_history;
@@ -236,18 +211,14 @@ GCN::run()
     float train_loss, train_acc, val_loss, val_acc;
     timer_start(TMR_TRAIN); // just for timing purposes
     std::tie(train_loss, train_acc) =
-      train_epoch(); // train the epoch and record the current train_loss and
-                     // train_accuracy
+        train_epoch(); // train the epoch and record the current train_loss and
+                       // train_accuracy
     std::tie(val_loss, val_acc) =
-      eval(2); // eval the model at the current step in order to obtain the
-               // val_loss and val_accuracy
+        eval(2); // eval the model at the current step in order to obtain the
+                 // val_loss and val_accuracy
     printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f "
            "time=%.5f\n",
-           epoch,
-           train_loss,
-           train_acc,
-           val_loss,
-           val_acc,
+           epoch, train_loss, train_acc, val_loss, val_acc,
            timer_stop(TMR_TRAIN));
 
     loss_history.push_back(val_loss); // record the validation loss in order to
@@ -264,6 +235,7 @@ GCN::run()
       }
     }
   }
+  timer_stop(TMR_TOTAL);
   PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
   PRINT_TIMER_AVERAGE(TMR_MATMUL_FW, epoch);
   PRINT_TIMER_AVERAGE(TMR_MATMUL_BW, epoch);
@@ -280,8 +252,7 @@ GCN::run()
   float test_loss, test_acc;
   timer_start(TMR_TEST);
   std::tie(test_loss, test_acc) = eval(3); // eval the model on the test set
-  printf("test_loss=%.5f test_acc=%.5f time=%.5f\n",
-         test_loss,
-         test_acc,
+  printf("test_loss=%.5f test_acc=%.5f time=%.5f\n", test_loss, test_acc,
          timer_stop(TMR_TEST));
+  std::cout << "total time: " << timer_total(TMR_TOTAL) << std::endl;
 }
