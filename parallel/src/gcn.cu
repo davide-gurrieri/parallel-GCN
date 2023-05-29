@@ -42,7 +42,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     streams.emplace_back(High); // backward + optimization 1
     streams.emplace_back(High); // backard + optimization 2
     streams.emplace_back(High); // forward evaluation
-    events.resize(7);
+    events.resize(8);
     initialize_random();
     dev_truth = dev_shared_ptr<integer>(params->num_nodes);
 
@@ -184,6 +184,7 @@ void GCN::set_truth(const natural current_split, smart_stream stream) const
         modules.back()->set_num_samples(params->test_dim);
 
     const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), N_BLOCKS);
+    cudaStreamWaitEvent(stream.get(), events[7].get());
     set_truth_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_truth.get(), dev_data.dev_split.get(), dev_data.dev_label.get(), params->num_nodes, current_split);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -262,14 +263,42 @@ void GCN::get_accuracy(smart_stream stream, bool training) const
 
 // ##################################################################################
 
+__global__ void finalize_kernel(real *dev_l2, real *dev_loss, real *dev_wrong, natural samples, real weight_decay)
+{
+    if (threadIdx.x == 0)
+    {
+        *dev_loss /= samples;
+        *dev_l2 = weight_decay * (*dev_l2) / real(2);
+        *dev_loss = *dev_loss + *dev_l2;
+        *dev_wrong = (samples - *dev_wrong) / static_cast<real>(samples);
+    }
+}
+
+__global__ void print(real *train_loss, real *train_acc, real *val_loss, real *val_acc, natural epoch)
+{
+    if (threadIdx.x == 0)
+        printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f\n", epoch, *train_loss, *train_acc, *val_loss, *val_acc);
+}
+
+__global__ void print_test(real *test_loss, real *test_acc)
+{
+    if (threadIdx.x == 0)
+        printf("test_loss=%.5f test_acc=%.5f\n", *test_loss, *test_acc);
+}
+
+// ##################################################################################
+
 void GCN::eval(const natural current_split, const natural epoch) const
 {
 #ifdef FEATURE
     set_input(streams[3], false);
 #endif
+
+    for (natural i = 0; i < modules.size() - 1; i++)
+        modules[i]->forward(false, streams[3]);
     set_truth(current_split, streams[3]);
-    for (const auto &m : modules)
-        m->forward(false, streams[3]);
+    modules.back()->forward(false, streams[3]);
+
     //! cudaStreamSynchronize(streams[3].get());
     //!  *loss /= modules.back()->get_num_samples();
     //! const real test_loss = *loss + get_l2_penalty(streams[3]);
@@ -287,12 +316,15 @@ void GCN::train_epoch()
 {
     // input set by constructor and by eval()
     cudaStreamWaitEvent(streams[0].get(), events[5].get());
-    set_truth(1, streams[0]);         // get the true labels for the dataset with split == 1 (train)
-    for (const auto &m : modules)     // iterate over the layer applying a forward pass
-        m->forward(true, streams[0]); // true means train
+
+    for (natural i = 0; i < modules.size() - 1; i++)
+        modules[i]->forward(true, streams[0]);
+    set_truth(1, streams[0]); // get the true labels for the dataset with split == 1 (train)
+    modules.back()->forward(true, streams[0]);
 
     get_l2_penalty(streams[0], true);
     get_accuracy(streams[0], true);
+    finalize_kernel<<<1, 1, 0, streams[0].get()>>>(dev_l2_train.get(), dev_loss_train.get(), dev_wrong_train.get(), params->train_dim, adam_params->weight_decay);
 
     for (integer i = modules.size() - 1; i >= 0; i--)
         modules[i]->backward(); // do a backward pass on the layers
@@ -335,6 +367,7 @@ void GCN::train_epoch()
 
 void GCN::run()
 {
+    timer_start(TMR_TOTAL);
     natural epoch = 1;
     // real total_time = 0.0;
     std::vector<real> loss_history;
@@ -349,6 +382,7 @@ void GCN::run()
 
         // eval the model at the current step in order to obtain the val_loss and val_accuracy
         eval(2, false);
+        finalize_kernel<<<1, 1, 0, streams[3].get()>>>(dev_l2_eval.get(), dev_loss_eval.get(), dev_wrong_eval.get(), params->val_dim, adam_params->weight_decay);
 
         // cudaDeviceSynchronize();
 
@@ -371,7 +405,8 @@ void GCN::run()
                     }
                 }
         */
-        finalize(streams[0], streams[3], epoch, false);
+        // finalize(streams[0], streams[3], epoch, false);
+        print<<<1, 1, 0, streams[3].get()>>>(dev_loss_train.get(), dev_wrong_train.get(), dev_loss_eval.get(), dev_wrong_eval.get(), epoch);
     }
 
     // PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
@@ -389,49 +424,13 @@ void GCN::run()
     PRINT_TIMER_AVERAGE(TMR_LOSS_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_OPTIMIZER, epoch);
 */
-    timer_start(TMR_TEST);
+    timer_stop(TMR_TOTAL);
+    // timer_start(TMR_TEST);
     eval(3, false); // eval the model on the test set
-    finalize(streams[0], streams[3], epoch, true);
+    finalize_kernel<<<1, 1, 0, streams[3].get()>>>(dev_l2_eval.get(), dev_loss_eval.get(), dev_wrong_eval.get(), params->test_dim, adam_params->weight_decay);
+    print_test<<<1, 1, 0, streams[3].get()>>>(dev_loss_eval.get(), dev_wrong_eval.get());
+    cudaDeviceSynchronize();
+    std::cout << "total time: " << timer_total(TMR_TOTAL) << std::endl;
 }
 
 // ##################################################################################
-
-__global__ void finalize_kernel(real *dev_l2, real *dev_loss, real *dev_wrong, natural samples, real weight_decay)
-{
-    if (threadIdx.x == 0)
-    {
-        *dev_loss /= samples;
-        *dev_l2 = weight_decay * (*dev_l2) / real(2);
-        *dev_loss = *dev_loss + *dev_l2;
-        *dev_wrong = (samples - *dev_wrong) / static_cast<real>(samples);
-    }
-}
-
-__global__ void print(real *train_loss, real *train_acc, real *val_loss, real *val_acc, natural epoch)
-{
-    if (threadIdx.x == 0)
-        printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f\n", epoch, *train_loss, *train_acc, *val_loss, *val_acc);
-}
-
-__global__ void print_test(real *test_loss, real *test_acc)
-{
-    if (threadIdx.x == 0)
-        printf("test_loss=%.5f test_acc=%.5f\n", *test_loss, *test_acc);
-}
-
-void GCN::finalize(smart_stream stream1, smart_stream stream2, natural epoch, bool test) const
-{
-    if (!test)
-    {
-        finalize_kernel<<<1, 1, 0, stream1.get()>>>(dev_l2_train.get(), dev_loss_train.get(), dev_wrong_train.get(), params->train_dim, adam_params->weight_decay);
-        cudaEventRecord(events[6].get(), stream1.get());
-        finalize_kernel<<<1, 1, 0, stream2.get()>>>(dev_l2_eval.get(), dev_loss_eval.get(), dev_wrong_eval.get(), params->val_dim, adam_params->weight_decay);
-        cudaStreamWaitEvent(stream2.get(), events[6].get());
-        print<<<1, 1, 0, stream2.get()>>>(dev_loss_train.get(), dev_wrong_train.get(), dev_loss_eval.get(), dev_wrong_eval.get(), epoch);
-    }
-    else
-    {
-        finalize_kernel<<<1, 1, 0, stream2.get()>>>(dev_l2_eval.get(), dev_loss_eval.get(), dev_wrong_eval.get(), params->test_dim, adam_params->weight_decay);
-        print_test<<<1, 1, 0, stream2.get()>>>(dev_loss_eval.get(), dev_wrong_eval.get());
-    }
-}

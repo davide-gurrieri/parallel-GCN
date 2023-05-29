@@ -90,7 +90,6 @@ class GCN
 
   void get_accuracy(smart_stream stream, bool training) const;
   void get_l2_penalty(smart_stream stream, bool training) const;
-  void finalize(smart_stream stream1, smart_stream stream2, natural epoch, bool test) const;
   void train_epoch();
   void eval(const natural current_split, const natural epoch) const;
 

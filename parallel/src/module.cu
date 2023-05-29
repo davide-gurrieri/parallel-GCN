@@ -587,6 +587,7 @@ void CrossEntropyLoss::forward(bool training, smart_stream stream) const
     const natural DIM = logits->size / num_classes;
     const natural n_blocks = std::min(CEIL(DIM, N_THREADS), N_BLOCKS);
     cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss.get(), num_classes, DIM, num_samples, training);
+    cudaEventRecord(events[7].get(), stream.get());
     if (training)
         cudaEventRecord(events[3].get(), stream.get());
 #ifdef DEBUG_CUDA
