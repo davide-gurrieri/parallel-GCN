@@ -97,7 +97,6 @@ void Dropout::backward() const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
     // timer_stop(TMR_DROPOUT_BW);
 }
 
@@ -509,8 +508,7 @@ __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, 
     {
         natural row = i / p;
         natural col = i % p;
-        // i = row * p + col
-        const real c_val = c[i];
+        const real c_val = c[i]; // i = row * p + col
 #pragma unroll
         for (natural j = 0; j < n; j++)
             atomicAdd(&b[j * p + col], c_val * a[row * n + j]);
@@ -543,7 +541,7 @@ void Matmul::backward() const
 // CROSSENTROPYLOSS
 // ##################################################################################
 
-CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, pinned_host_ptr<real> loss_, natural num_classes_, dev_shared_ptr<real> dev_loss_train_, dev_shared_ptr<real> dev_loss_eval_) : logits(logits_), dev_truth(dev_truth_), loss(loss_), num_classes(num_classes_), dev_loss_train(dev_loss_train_), dev_loss_eval(dev_loss_eval_) {}
+CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, natural num_classes_, dev_shared_ptr<real> dev_loss_train_, dev_shared_ptr<real> dev_loss_eval_) : logits(logits_), dev_truth(dev_truth_), num_classes(num_classes_), dev_loss_train(dev_loss_train_), dev_loss_eval(dev_loss_eval_) {}
 
 // ##################################################################################
 
@@ -614,7 +612,6 @@ void CrossEntropyLoss::forward(bool training, smart_stream stream) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // dev_loss_res.copy_to_host_async(loss.get(), stream);
 
     // timer_stop(TMR_LOSS_FW);
 }
@@ -634,8 +631,3 @@ void CrossEntropyLoss::set_num_samples(natural num_samples_)
 }
 
 // ##################################################################################
-
-natural CrossEntropyLoss::get_num_samples() const
-{
-    return num_samples;
-};

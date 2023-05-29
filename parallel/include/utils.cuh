@@ -1,17 +1,10 @@
 #ifndef UTILS_CUH
 #define UTILS_CUH
+
 #include <iostream>
 #include <cmath>
 #include <curand_kernel.h>
-// #include <cuda_fp16.h>
 #include <cuda_runtime.h>
-
-// * for std::accumulate
-#include <numeric>
-
-// Aliases
-// using valueType = float;
-// using indexType = size_t;
 
 using natural = unsigned;
 using integer = int;
@@ -19,42 +12,11 @@ using real = float;
 // using randState = curandStatePhilox4_32_10_t;
 using randState = curandState_t;
 
-// #define indexType int
-
-// Variables
-/*
-namespace cudaParams
-{
-    natural N_THREADS = 512;
-    natural N_THREADS
-    natural N_BLOCKS = 128;
-    natural TILE_DIM = 8;
-}
-*/
 constexpr natural N_THREADS = 1024;
 constexpr natural N_THREADS_DROPOUT = 1024;
 constexpr natural N_BLOCKS = 128; // 8 * 16 with 16 number of SM (multiProcessorCount)
 constexpr natural TILE_DIM = 16;
-constexpr natural TILE_DIM2 = 32;
 constexpr natural SEED = 42;
-
-/*
-#define N_THREADS 1024
-#define N_THREADS_DROPOUT 512
-#define N_BLOCKS 128 // 8 * 16 with 16 number of SM (multiProcessorCount)
-#define TILE_DIM 16
-// #define TILE_DIM_Y 32 // 128
-// #define TILE_DIM_X 32 // 8
-#define SEED 42
-*/
-
-// #define CHECK_CUDA_ERROR(val) nothing((val))
-/*
-template <typename T>
-void nothing(T err)
-{
-}
-*/
 
 #ifdef DEBUG_CUDA
 
@@ -79,6 +41,8 @@ void check(T err, const char *const func, const char *const file,
  */
 #define CEIL(M, N) (((M) + (N)-1) / (N))
 
+/*
+// Debug functions
 #include "../include/shared_ptr.cuh"
 template <class T>
 void print_gpu(dev_shared_ptr<T> dev_data, natural size, natural col)
@@ -109,6 +73,7 @@ inline void print_cpu(const std::vector<real> &v, natural col)
             printf("\n");
     }
 }
+*/
 
 inline void print_gpu_info()
 {

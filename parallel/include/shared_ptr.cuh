@@ -192,6 +192,7 @@ private:
     }
 };
 
+/*
 template <typename T>
 class pinned_host_ptr
 {
@@ -328,5 +329,6 @@ private:
         }
     }
 };
+*/
 
 #endif

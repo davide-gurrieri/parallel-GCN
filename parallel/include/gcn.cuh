@@ -78,10 +78,6 @@ class GCN
   dev_shared_ptr<real> dev_loss_eval;
   dev_shared_ptr<real> dev_wrong_eval; // used by get_accuracy()
 
-  pinned_host_ptr<real> pinned_l2;
-  pinned_host_ptr<real> loss;
-  pinned_host_ptr<natural> pinned_wrong;
-
   void initialize_random();
 #ifdef FEATURE
   void set_input(smart_stream stream, bool first) const;
