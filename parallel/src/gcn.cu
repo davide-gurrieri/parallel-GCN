@@ -276,18 +276,23 @@ std::pair<real, real> GCN::train_epoch()
     // DEBUG
     /*
         std::cout << "layer1_var1" << std::endl;
-        variables[1]->print(params->hidden_dim);
+        variables[1]->print("data", params->hidden_dim);
         std::cout << "layer1_weight" << std::endl;
-        variables[2]->print(params->hidden_dim);
+        variables[2]->print("data", params->hidden_dim);
         std::cout << "layer1_var2" << std::endl;
-        variables[3]->print(params->hidden_dim);
+        variables[3]->print("data", params->hidden_dim);
         std::cout << "layer2_var1" << std::endl;
-        variables[4]->print(params->output_dim);
+        variables[4]->print("data", params->output_dim);
         std::cout << "layer2_weight" << std::endl;
-        variables[5]->print(params->output_dim);
+        variables[5]->print("data", params->output_dim);
         std::cout << "output" << std::endl;
-        variables[6]->print(params->output_dim);
+        variables[6]->print("data", params->output_dim);
     */
+    /*
+     cudaDeviceSynchronize();
+     for (unsigned int i = 0; i < variables.size(); i++)
+         variables[i]->save("variable" + std::to_string(i) + ".txt", "data", params->output_dim);
+ */
     return finalize(streams[0]);
 }
 
@@ -378,6 +383,7 @@ std::pair<real, real> GCN::finalize(smart_stream stream) const
 
     // loss
     *loss /= total;
+
     real l2 = adam_params->weight_decay * (*pinned_l2) / real(2);
     const real final_loss = *loss + l2;
 

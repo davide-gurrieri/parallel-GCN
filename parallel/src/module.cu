@@ -313,53 +313,49 @@ __global__ void matmul_kernel_forward(const real *a, const real *b, real *c, con
     __shared__ real tile_b[TILE_DIM][TILE_DIM];
     natural tx = threadIdx.x;
     natural ty = threadIdx.y;
+    natural row = blockIdx.y * blockDim.x + ty;
+    natural col = blockIdx.x * TILE_DIM + tx;
+    //  number of tile rows/columns needed to cover the matrices A and B
+    natural range = CEIL(n, TILE_DIM);
+    //  partial sum of the result matrix element computed by the thread
+    real res = 0;
+
 #pragma unroll
-    for (natural row = blockIdx.y * blockDim.x + ty; row < m; row += blockDim.y * gridDim.y)
+    // iterates over the tiles needed to compute the result matrix element
+    for (natural i = 0; i < range; i++)
     {
-        natural col = blockIdx.x * TILE_DIM + tx;
-        //  number of tile rows/columns needed to cover the matrices A and B
-        natural range = CEIL(n, TILE_DIM);
-        //  partial sum of the result matrix element computed by the thread
-        real res = 0;
+        // check if the current thread is within the boundaries of A .
+        if (row < m && i * TILE_DIM + tx < n)
+            // load a portion of matrix A into the shared memory tiles.
+            tile_a[ty][tx] = a[row * n + i * TILE_DIM + tx];
+        else
+            tile_a[ty][tx] = 0;
+        // check if the current thread is within the boundaries of  B.
+        if (col < p && i * TILE_DIM + ty < n)
+            // load a portion of matrix B into the shared memory tiles.
+            tile_b[ty][tx] = b[(i * TILE_DIM + ty) * p + col];
 
+        else
+            tile_b[ty][tx] = 0;
+        // synchronizes all threads in the block before executing the next set of instructions.
+        __syncthreads();
 #pragma unroll
-        // iterates over the tiles needed to compute the result matrix element
-        for (natural i = 0; i < range; i++)
-        {
-            // check if the current thread is within the boundaries of A .
-            if (i * TILE_DIM + tx < n)
-                // load a portion of matrix A into the shared memory tiles.
-                tile_a[ty][tx] = a[row * n + i * TILE_DIM + tx];
-            else
-                tile_a[ty][tx] = 0;
-            // check if the current thread is within the boundaries of  B.
-            if (col < p && i * TILE_DIM + ty < n)
-                // load a portion of matrix B into the shared memory tiles.
-                tile_b[ty][tx] = b[(i * TILE_DIM + ty) * p + col];
+        // computes the partial sum of the result matrix element using the shared memory tiles
+        for (natural j = 0; j < TILE_DIM; j++)
+            res += tile_a[ty][j] * tile_b[j][tx];
 
-            else
-                tile_b[ty][tx] = 0;
-            // synchronizes all threads in the block before executing the next set of instructions.
-            __syncthreads();
-#pragma unroll
-            // computes the partial sum of the result matrix element using the shared memory tiles
-            for (natural j = 0; j < TILE_DIM; j++)
-                res += tile_a[ty][j] * tile_b[j][tx];
-
-            __syncthreads();
-        }
-        // stores the result of the partial sum in the result matrix if the thread is within the boundaries of the result matrix
-        if (col < p)
-            c[row * p + col] = res;
+        __syncthreads();
     }
+    // stores the result of the partial sum in the result matrix if the thread is within the boundaries of the result matrix
+    if (row < m && col < p)
+        c[row * p + col] = res;
 }
 
 void Matmul::forward(bool training, smart_stream stream) const
 {
     // timer_start(TMR_MATMUL_FW);
 
-    const natural n_blocks_y = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
-    const dim3 n_blocks(CEIL(p, TILE_DIM), n_blocks_y);
+    const dim3 n_blocks(CEIL(p, TILE_DIM), CEIL(m, TILE_DIM));
     const dim3 n_threads(TILE_DIM, TILE_DIM);
     cudaStreamWaitEvent(stream.get(), events[1].get());
     matmul_kernel_forward<<<n_blocks, n_threads, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), m, n, p);
@@ -379,44 +375,41 @@ __global__ void matmul_kernel_backward_1(real *a, const real *b, const real *c, 
     __shared__ real tile_b[TILE_DIM][TILE_DIM];
     natural tx = threadIdx.x;
     natural ty = threadIdx.y;
+    natural row = blockIdx.y * blockDim.x + ty;
+    natural col = blockIdx.x * TILE_DIM + tx;
+    //  number of tile rows/columns needed to cover the matrices A and B
+    natural range = CEIL(p, TILE_DIM);
+    //  partial sum of the result matrix element computed by the thread
+    real res = 0;
+
 #pragma unroll
-    for (natural row = blockIdx.y * blockDim.x + ty; row < m; row += blockDim.y * gridDim.y)
+    // iterates over the tiles needed to compute the result matrix element
+    for (natural i = 0; i < range; i++)
     {
-        natural col = blockIdx.x * TILE_DIM + tx;
-        //  number of tile rows/columns needed to cover the matrices A and B
-        natural range = CEIL(p, TILE_DIM);
-        //  partial sum of the result matrix element computed by the thread
-        real res = 0;
-
+        // check if the current thread is within the boundaries of C .
+        if (row < m && i * TILE_DIM + tx < p)
+            // load a portion of matrix A into the shared memory tiles.
+            tile_c[ty][tx] = c[row * p + i * TILE_DIM + tx];
+        else
+            tile_c[ty][tx] = 0;
+        // check if the current thread is within the boundaries of  B.
+        if (col < n && i * TILE_DIM + ty < p)
+            // load a portion of matrix B into the shared memory tiles.
+            tile_b[ty][tx] = b[col * p + i * TILE_DIM + ty];
+        else
+            tile_b[ty][tx] = 0;
+        // synchronizes all threads in the block before executing the next set of instructions.
+        __syncthreads();
 #pragma unroll
-        // iterates over the tiles needed to compute the result matrix element
-        for (natural i = 0; i < range; i++)
-        {
-            // check if the current thread is within the boundaries of C .
-            if (i * TILE_DIM + tx < p)
-                // load a portion of matrix A into the shared memory tiles.
-                tile_c[ty][tx] = c[row * p + i * TILE_DIM + tx];
-            else
-                tile_c[ty][tx] = 0;
-            // check if the current thread is within the boundaries of  B.
-            if (col < n && i * TILE_DIM + ty < p)
-                // load a portion of matrix B into the shared memory tiles.
-                tile_b[ty][tx] = b[col * p + i * TILE_DIM + ty];
-            else
-                tile_b[ty][tx] = 0;
-            // synchronizes all threads in the block before executing the next set of instructions.
-            __syncthreads();
-#pragma unroll
-            // computes the partial sum of the result matrix element using the shared memory tiles
-            for (natural k = 0; k < TILE_DIM; k++)
-                res += tile_c[ty][k] * tile_b[k][tx];
+        // computes the partial sum of the result matrix element using the shared memory tiles
+        for (natural k = 0; k < TILE_DIM; k++)
+            res += tile_c[ty][k] * tile_b[k][tx];
 
-            __syncthreads();
-        }
-        // stores the result of the partial sum in the result matrix if the thread is within the boundaries of the result matrix
-        if (col < n)
-            a[row * n + col] = res;
+        __syncthreads();
     }
+    // stores the result of the partial sum in the result matrix if the thread is within the boundaries of the result matrix
+    if (row < m && col < n)
+        a[row * n + col] = res;
 }
 
 // second version with long internal loop abd shared memory
@@ -504,15 +497,14 @@ void Matmul::backward() const
 {
     // timer_start(TMR_MATMUL_BW);
 
-    const natural n_blocks_y_1 = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
-    const dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
+    const dim3 n_blocks_1(CEIL(n, TILE_DIM), CEIL(m, TILE_DIM));
     const dim3 n_threads(TILE_DIM, TILE_DIM);
     matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, streams[1].get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
 
-    const natural n_blocks_2 = std::min(CEIL(m * p, TILE_DIM), N_BLOCKS);
+    const natural n_blocks_2 = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
     cudaStreamWaitEvent(streams[2].get(), events[4].get());
     b->zero_grad(streams[2]);
     matmul_kernel_backward_2<<<n_blocks_2, N_THREADS, 0, streams[2].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);

@@ -32,12 +32,9 @@ int main(int argc, char **argv) {
 #ifdef TUNE
   const std::string file_name = command_line("file", "./parameters.txt");
 #else
-
   const std::string name =
       "./specific_parameters/parameters_" + input_name + ".txt";
-  std::cout << name << std::endl;
   const std::string file_name = command_line("file", name.c_str());
-
 #endif
   GetPot datafile(file_name.c_str());
   // GCNParams
@@ -53,7 +50,8 @@ int main(int argc, char **argv) {
   adam_params.beta2 = datafile("beta2", 0.0);
   adam_params.eps = datafile("eps", 0.0);
   // CudaParams
-  N_BLOCKS = datafile("num_blocks_factor", 0) * multiProcessorCount;
+  N_BLOCKS = static_cast<natural>(datafile("num_blocks_factor", 0)) *
+             multiProcessorCount;
   N_THREADS = datafile("num_threads", 0);
 
 #else

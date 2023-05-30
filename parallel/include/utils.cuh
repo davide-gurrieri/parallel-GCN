@@ -11,10 +11,9 @@ using real = float;
 using randState = curandState_t;
 // using randState = curandStatePhilox4_32_10_t;
 
-inline natural N_THREADS = 1024;
+inline natural N_THREADS;
 // constexpr natural N_THREADS_DROPOUT = 1024;
-inline natural N_BLOCKS =
-    128; // 8 * 16 with 16 number of SM (multiProcessorCount)
+inline natural N_BLOCKS; // 8 * 16 with 16 number of SM (multiProcessorCount)
 constexpr natural TILE_DIM = 16;
 constexpr natural SEED = 42;
 
