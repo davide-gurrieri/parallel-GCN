@@ -1,5 +1,6 @@
 #!/bin/bash
 mkdir -p output
+mkdir -p output/plot
 # Compile with the right flags
 make OPTIONAL_CXXFLAGS="-DDYNAMIC_INPUT -DDEBUG_CUDA -DFEATURE -DTUNE"
 
@@ -23,7 +24,7 @@ do
 hidden_dim = 16
 dropout_input = 0.5
 dropout_layer1 = 0.5
-epochs = 1000
+epochs = 100
 early_stopping = 0
 
 #-------------------------------------------------
@@ -44,8 +45,16 @@ num_threads = $num_threads"
             # Write the content to the file
             echo "$content" > parameters.txt
             # Run the algorithm
-            time=$(./exec/gcn-par $dataset)
-            echo "$num_blocks_factor $num_threads $time" >> "$file_name"
+            iter=10
+            sum=0
+            for ((i=1; i<=$iter; i++))
+            do
+                time=$(./exec/gcn-par $dataset)
+                sum=$(echo "$sum + $time" | bc)
+            done
+            avg_time=$(echo "scale=3; $sum / $iter" | bc)
+            #time=$(./exec/gcn-par $dataset)
+            echo "$num_blocks_factor $num_threads $avg_time" >> "$file_name"
         done
     done
     python3 script/ordering.py $file_name
