@@ -313,8 +313,9 @@ void GCN::run()
         // eval the model at the current step in order to obtain the val_loss and val_accuracy
         std::tie(val_loss, val_acc) = eval(2);
 #ifndef TUNE
+        const auto time = timer_stop(TMR_TRAIN);
         printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f time=%.5f\n",
-               epoch, train_loss, train_acc, val_loss, val_acc, timer_stop(TMR_TRAIN));
+               epoch, train_loss, train_acc, val_loss, val_acc, time);
 #else
         timer_stop(TMR_TRAIN);
 #endif
@@ -363,7 +364,7 @@ void GCN::run()
     std::tie(test_loss, test_acc) = eval(3); // eval the model on the test set
 #ifndef TUNE
     printf("test_loss=%.5f test_acc=%.5f time=%.5f\n", test_loss, test_acc, timer_stop(TMR_TEST));
-    std::cout << "total time training + validation: " << timer_total(TMR_TOTAL) << std::endl;
+    printf("total time: %.5f\n", timer_total(TMR_TOTAL));
 #endif
 }
 

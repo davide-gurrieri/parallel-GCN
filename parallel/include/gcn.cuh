@@ -31,13 +31,6 @@ struct GCNParams
 
 // ##################################################################################
 
-struct CudaParams
-{
-  natural num_blocks_factor{8}, num_threads{1024}, tile_dim{16};
-};
-
-// ##################################################################################
-
 struct GCNData
 {
   SparseIndex feature_index, graph;

@@ -24,8 +24,10 @@ constexpr natural SEED = 42;
 
 template <typename T>
 void check(T err, const char *const func, const char *const file,
-           const int line) {
-  if (err != cudaSuccess) {
+           const int line)
+{
+  if (err != cudaSuccess)
+  {
     std::cerr << "CUDA Runtime Error at: " << file << ":" << line << std::endl;
     std::cerr << cudaGetErrorString(err) << " " << func << std::endl;
     std::exit(EXIT_FAILURE);
@@ -72,10 +74,11 @@ inline void print_cpu(const std::vector<real> &v, natural col)
 }
 */
 
-inline natural print_gpu_info() {
+inline natural print_gpu_info()
+{
   int dev;
-  cudaDeviceProp devProp; // C struct
-  cudaGetDevice(&dev);    // Get the id of the currently used device
+  cudaDeviceProp devProp;                 // C struct
+  cudaGetDevice(&dev);                    // Get the id of the currently used device
   cudaGetDeviceProperties(&devProp, dev); // Get the device properties
 #ifndef TUNE
   std::cout << std::endl;
