@@ -6,4 +6,5 @@ parallel/exec/
 parallel/data/reddit.graph
 parallel/data/reddit.split
 parallel/data/reddit.svmlight
+parallel/output/
 .vscode/

@@ -1,25 +1,23 @@
 #!/bin/bash
-
-# Name of the dataset
-dataset="pubmed"
-
-# Name of the output file
-file_name="tuning_cuda_$dataset.txt"
-
-# Delete output file (if exists)
-if [ -e "$file_name" ]; then
-    rm "$file_name"
-fi
-
+mkdir -p output
 # Compile with the right flags
 make OPTIONAL_CXXFLAGS="-DDYNAMIC_INPUT -DDEBUG_CUDA -DFEATURE -DTUNE"
 
-for ((num_blocks_factor=1; num_blocks_factor<=16; num_blocks_factor++))
+for dataset in "cora" "pubmed" "citeseer"
 do
-  for num_threads in 16 32 64 128 256 512 1024
-  do
-      # Define the content to be written, including the variable value
-      content="#-------------------------------------------------
+    # Name of the output file
+    file_name="output/tuning_cuda_$dataset.txt"
+    # Delete output file (if exists)
+    if [ -e "$file_name" ]; then
+        rm "$file_name"
+    fi
+    # echo "num_blocks_factor num_threads avg_epoch_training_time" >> "$file_name"
+    for ((num_blocks_factor=1; num_blocks_factor<=16; num_blocks_factor++))
+    do
+        for num_threads in 128 256 512 1024
+        do
+            # Define the content to be written, including the variable value
+            content="#-------------------------------------------------
 # Parameters for GCN
 #-------------------------------------------------
 hidden_dim = 16
@@ -43,10 +41,12 @@ eps = 1e-8
 num_blocks_factor = $num_blocks_factor
 num_threads = $num_threads"
 
-      # Write the content to the file
-      echo "$content" > parameters.txt
-      # Run the algorithm
-      time=$(./exec/gcn-par $dataset)
-      echo "num_blocks_factor=$num_blocks_factor-num_threads=$num_threads $time" >> "$file_name"
-  done
+            # Write the content to the file
+            echo "$content" > parameters.txt
+            # Run the algorithm
+            time=$(./exec/gcn-par $dataset)
+            echo "$num_blocks_factor $num_threads $time" >> "$file_name"
+        done
+    done
+    python3 script/ordering.py $file_name
 done
