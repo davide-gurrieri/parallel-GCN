@@ -8,3 +8,5 @@ parallel/data/reddit.split
 parallel/data/reddit.svmlight
 parallel/output/
 .vscode/
+parallel/notebook.ipynb
+parallel/.ipynb_checkpoints
