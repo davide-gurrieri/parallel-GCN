@@ -2,9 +2,7 @@
 #include <array>
 
 std::chrono::time_point<std::chrono::high_resolution_clock> tmr_t0[__NUM_TMR];
-std::vector<float> tmr_sum(__NUM_TMR, 0.0f);
-
-// float tmr_sum[__NUM_TMR];
+float tmr_sum[__NUM_TMR];
 
 void timer_start(timer_instance t) {
   tmr_t0[t] = std::chrono::high_resolution_clock::now();

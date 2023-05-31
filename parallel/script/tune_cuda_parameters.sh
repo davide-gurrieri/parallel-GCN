@@ -45,7 +45,7 @@ num_threads = $num_threads"
             # Write the content to the file
             echo "$content" > parameters.txt
             # Run the algorithm
-            iter=10
+            iter=100
             sum=0
             for ((i=1; i<=$iter; i++))
             do
