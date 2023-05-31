@@ -21,7 +21,7 @@ fi
 echo "time dataset" >> "$file_name1"
 echo "time dataset" >> "$file_name2"
 
-iter=10
+iter=100
 for ((i=1; i<=$iter; i++))
 do
     for dataset in "cora" "pubmed" "citeseer"
