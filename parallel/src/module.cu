@@ -64,8 +64,8 @@ void Dropout::forward(bool training, smart_stream stream) const
 
     // timer_start(TMR_DROPOUT_FW);
     const real scale = 1.0 / (1.0 - p);
-    const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    dropout_kernel_forward<<<n_blocks, N_THREADS, N_THREADS * sizeof(randState), stream.get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
+    const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    dropout_kernel_forward<<<n_blocks, CudaParams::N_THREADS, CudaParams::N_THREADS * sizeof(randState), stream.get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -91,8 +91,8 @@ void Dropout::backward() const
     // timer_start(TMR_DROPOUT_BW);
 
     const real scale = 1.0 / (1.0 - p);
-    const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    dropout_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
+    const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    dropout_kernel_backward<<<n_blocks, CudaParams::N_THREADS, 0, streams[1].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -131,9 +131,9 @@ void SparseMatmul::forward(bool training, smart_stream stream) const
 {
     // timer_start(TMR_SPMATMUL_FW);
 
-    const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
+    const natural n_blocks = std::min(CEIL(m * p, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     cudaStreamWaitEvent(stream.get(), events[0].get());
-    sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
+    sparse_matmul_kernel_forward<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -169,8 +169,8 @@ void SparseMatmul::backward() const
     // timer_start(TMR_SPMATMUL_BW);
 
     b->zero_grad(streams[1]);
-    const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
-    sparse_matmul_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
+    const natural n_blocks = std::min(CEIL(m * p, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    sparse_matmul_kernel_backward<<<n_blocks, CudaParams::N_THREADS, 0, streams[1].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef FEATURE
     cudaEventRecord(events[2].get(), streams[1].get());
 #endif
@@ -210,8 +210,8 @@ void GraphSum::forward(bool training, smart_stream stream) const
     // timer_start(TMR_GRAPHSUM_FW);
 
     const natural numNodes = graph->indptr_size - 1;
-    const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
-    graphsum_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    const natural n_blocks = std::min(CEIL(numNodes * dim, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    graphsum_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -226,8 +226,8 @@ void GraphSum::backward() const
     // timer_start(TMR_GRAPHSUM_BW);
 
     const natural numNodes = graph->indptr_size - 1;
-    const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
-    graphsum_kernel<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    const natural n_blocks = std::min(CEIL(numNodes * dim, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    graphsum_kernel<<<n_blocks, CudaParams::N_THREADS, 0, streams[1].get()>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
     cudaEventRecord(events[4].get(), streams[1].get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -264,8 +264,8 @@ void ReLU::forward(bool training, smart_stream stream) const
 {
     // timer_start(TMR_RELU_FW);
 
-    const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    relu_kernel_forward<<<n_blocks, N_THREADS, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), in->size, training);
+    const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    relu_kernel_forward<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), in->size, training);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -290,8 +290,8 @@ void ReLU::backward() const
 {
     // timer_start(TMR_RELU_BW);
 
-    const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    relu_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size);
+    const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    relu_kernel_backward<<<n_blocks, CudaParams::N_THREADS, 0, streams[1].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -309,14 +309,14 @@ Matmul::Matmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Vari
 __global__ void matmul_kernel_forward(const real *a, const real *b, real *c, const natural m, const natural n, const natural p)
 {
     // shared memory arrays that are used as tiles to store a portion of matrices A and B.
-    __shared__ real tile_a[TILE_DIM][TILE_DIM];
-    __shared__ real tile_b[TILE_DIM][TILE_DIM];
+    __shared__ real tile_a[CudaParams::TILE_DIM][CudaParams::TILE_DIM];
+    __shared__ real tile_b[CudaParams::TILE_DIM][CudaParams::TILE_DIM];
     natural tx = threadIdx.x;
     natural ty = threadIdx.y;
     natural row = blockIdx.y * blockDim.x + ty;
-    natural col = blockIdx.x * TILE_DIM + tx;
+    natural col = blockIdx.x * CudaParams::TILE_DIM + tx;
     //  number of tile rows/columns needed to cover the matrices A and B
-    natural range = CEIL(n, TILE_DIM);
+    natural range = CEIL(n, CudaParams::TILE_DIM);
     //  partial sum of the result matrix element computed by the thread
     real res = 0;
 
@@ -325,15 +325,15 @@ __global__ void matmul_kernel_forward(const real *a, const real *b, real *c, con
     for (natural i = 0; i < range; i++)
     {
         // check if the current thread is within the boundaries of A .
-        if (row < m && i * TILE_DIM + tx < n)
+        if (row < m && i * CudaParams::TILE_DIM + tx < n)
             // load a portion of matrix A into the shared memory tiles.
-            tile_a[ty][tx] = a[row * n + i * TILE_DIM + tx];
+            tile_a[ty][tx] = a[row * n + i * CudaParams::TILE_DIM + tx];
         else
             tile_a[ty][tx] = 0;
         // check if the current thread is within the boundaries of  B.
-        if (col < p && i * TILE_DIM + ty < n)
+        if (col < p && i * CudaParams::TILE_DIM + ty < n)
             // load a portion of matrix B into the shared memory tiles.
-            tile_b[ty][tx] = b[(i * TILE_DIM + ty) * p + col];
+            tile_b[ty][tx] = b[(i * CudaParams::TILE_DIM + ty) * p + col];
 
         else
             tile_b[ty][tx] = 0;
@@ -341,7 +341,7 @@ __global__ void matmul_kernel_forward(const real *a, const real *b, real *c, con
         __syncthreads();
 #pragma unroll
         // computes the partial sum of the result matrix element using the shared memory tiles
-        for (natural j = 0; j < TILE_DIM; j++)
+        for (natural j = 0; j < CudaParams::TILE_DIM; j++)
             res += tile_a[ty][j] * tile_b[j][tx];
 
         __syncthreads();
@@ -355,8 +355,8 @@ void Matmul::forward(bool training, smart_stream stream) const
 {
     // timer_start(TMR_MATMUL_FW);
 
-    const dim3 n_blocks(CEIL(p, TILE_DIM), CEIL(m, TILE_DIM));
-    const dim3 n_threads(TILE_DIM, TILE_DIM);
+    const dim3 n_blocks(CEIL(p, CudaParams::TILE_DIM), CEIL(m, CudaParams::TILE_DIM));
+    const dim3 n_threads(CudaParams::TILE_DIM, CudaParams::TILE_DIM);
     cudaStreamWaitEvent(stream.get(), events[1].get());
     matmul_kernel_forward<<<n_blocks, n_threads, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), m, n, p);
 #ifdef DEBUG_CUDA
@@ -371,14 +371,14 @@ void Matmul::forward(bool training, smart_stream stream) const
 __global__ void matmul_kernel_backward_1(real *a, const real *b, const real *c, const natural m, const natural n, const natural p)
 {
     // shared memory arrays that are used as tiles to store a portion of matrices A and B.
-    __shared__ real tile_c[TILE_DIM][TILE_DIM];
-    __shared__ real tile_b[TILE_DIM][TILE_DIM];
+    __shared__ real tile_c[CudaParams::TILE_DIM][CudaParams::TILE_DIM];
+    __shared__ real tile_b[CudaParams::TILE_DIM][CudaParams::TILE_DIM];
     natural tx = threadIdx.x;
     natural ty = threadIdx.y;
     natural row = blockIdx.y * blockDim.x + ty;
-    natural col = blockIdx.x * TILE_DIM + tx;
+    natural col = blockIdx.x * CudaParams::TILE_DIM + tx;
     //  number of tile rows/columns needed to cover the matrices A and B
-    natural range = CEIL(p, TILE_DIM);
+    natural range = CEIL(p, CudaParams::TILE_DIM);
     //  partial sum of the result matrix element computed by the thread
     real res = 0;
 
@@ -387,22 +387,22 @@ __global__ void matmul_kernel_backward_1(real *a, const real *b, const real *c, 
     for (natural i = 0; i < range; i++)
     {
         // check if the current thread is within the boundaries of C .
-        if (row < m && i * TILE_DIM + tx < p)
+        if (row < m && i * CudaParams::TILE_DIM + tx < p)
             // load a portion of matrix A into the shared memory tiles.
-            tile_c[ty][tx] = c[row * p + i * TILE_DIM + tx];
+            tile_c[ty][tx] = c[row * p + i * CudaParams::TILE_DIM + tx];
         else
             tile_c[ty][tx] = 0;
         // check if the current thread is within the boundaries of  B.
-        if (col < n && i * TILE_DIM + ty < p)
+        if (col < n && i * CudaParams::TILE_DIM + ty < p)
             // load a portion of matrix B into the shared memory tiles.
-            tile_b[ty][tx] = b[col * p + i * TILE_DIM + ty];
+            tile_b[ty][tx] = b[col * p + i * CudaParams::TILE_DIM + ty];
         else
             tile_b[ty][tx] = 0;
         // synchronizes all threads in the block before executing the next set of instructions.
         __syncthreads();
 #pragma unroll
         // computes the partial sum of the result matrix element using the shared memory tiles
-        for (natural k = 0; k < TILE_DIM; k++)
+        for (natural k = 0; k < CudaParams::TILE_DIM; k++)
             res += tile_c[ty][k] * tile_b[k][tx];
 
         __syncthreads();
@@ -456,10 +456,10 @@ void Matmul::backward() const
 
     // b->zero_grad();
     //  a->zero_grad();
-    const natural n_blocks_y_1 = std::min(CEIL(m, TILE_DIM), N_BLOCKS);
-    dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
-    dim3 n_blocks_2(CEIL(p, TILE_DIM), CEIL(n, TILE_DIM));
-    dim3 n_threads(TILE_DIM, TILE_DIM);
+    const natural n_blocks_y_1 = std::min(CEIL(m, CudaParams::TILE_DIM), CudaParams::N_BLOCKS);
+    dim3 n_blocks_1(CEIL(n, CudaParams::TILE_DIM), n_blocks_y_1);
+    dim3 n_blocks_2(CEIL(p, CudaParams::TILE_DIM), CEIL(n, CudaParams::TILE_DIM));
+    dim3 n_threads(CudaParams::TILE_DIM, CudaParams::TILE_DIM);
     matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, streams[1].get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -497,17 +497,17 @@ void Matmul::backward() const
 {
     // timer_start(TMR_MATMUL_BW);
 
-    const dim3 n_blocks_1(CEIL(n, TILE_DIM), CEIL(m, TILE_DIM));
-    const dim3 n_threads(TILE_DIM, TILE_DIM);
+    const dim3 n_blocks_1(CEIL(n, CudaParams::TILE_DIM), CEIL(m, CudaParams::TILE_DIM));
+    const dim3 n_threads(CudaParams::TILE_DIM, CudaParams::TILE_DIM);
     matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, streams[1].get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
 
-    const natural n_blocks_2 = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
+    const natural n_blocks_2 = std::min(CEIL(m * p, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     cudaStreamWaitEvent(streams[2].get(), events[4].get());
     b->zero_grad(streams[2]);
-    matmul_kernel_backward_2<<<n_blocks_2, N_THREADS, 0, streams[2].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
+    matmul_kernel_backward_2<<<n_blocks_2, CudaParams::N_THREADS, 0, streams[2].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -577,8 +577,8 @@ void CrossEntropyLoss::forward(bool training, smart_stream stream) const
 
     dev_loss_res.set_zero(stream);
     const natural DIM = logits->size / num_classes;
-    const natural n_blocks = std::min(CEIL(DIM, N_THREADS), N_BLOCKS);
-    cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss_res.get(), num_classes, DIM, num_samples, training);
+    const natural n_blocks = std::min(CEIL(DIM, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    cross_entropy_loss_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss_res.get(), num_classes, DIM, num_samples, training);
     if (training)
         cudaEventRecord(events[3].get(), stream.get());
 #ifdef DEBUG_CUDA

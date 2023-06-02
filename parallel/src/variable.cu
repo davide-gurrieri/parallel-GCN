@@ -32,8 +32,8 @@ void Variable::glorot(const natural in_size, const natural out_size) const
 {
     const double range = sqrtf(6.0f / (in_size + out_size));
     const double scale = range * 2;
-    const natural n_blocks = std::min(CEIL(size, N_THREADS), N_BLOCKS);
-    glorot_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(dev_data.get(), size, scale, dev_rand_states.get());
+    const natural n_blocks = std::min(CEIL(size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    glorot_kernel<<<n_blocks, CudaParams::N_THREADS, 0, streams[0].get()>>>(dev_data.get(), size, scale, dev_rand_states.get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -63,8 +63,8 @@ __global__ void set_value_kernel(real *data, const real value, const natural siz
 
 void Variable::set_value(const real value, smart_stream stream) const
 {
-    const natural n_blocks = std::min(CEIL(size, N_THREADS), N_BLOCKS);
-    set_value_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_data.get(), value, size);
+    const natural n_blocks = std::min(CEIL(size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    set_value_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(dev_data.get(), value, size);
 }
 
 // ##################################################################################

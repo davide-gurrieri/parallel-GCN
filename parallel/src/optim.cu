@@ -65,8 +65,8 @@ void Adam::step()
     /*
     for (const auto &var : vars)
     {
-        const natural n_blocks = std::min(CEIL(var.size, N_THREADS), static_cast<natural>(N_BLOCKS));
-        adam_step_kernel<<<n_blocks, N_THREADS, 0, streams[0].get()>>>(var.dev_data.get(), var.dev_grad.get(), var.dev_m.get(), var.dev_v.get(), var.size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), var.decay, step_size);
+        const natural n_blocks = std::min(CEIL(var.size, CudaParams::N_THREADS), static_cast<natural>(N_BLOCKS));
+        adam_step_kernel<<<n_blocks, CudaParams::N_THREADS, 0, streams[0].get()>>>(var.dev_data.get(), var.dev_grad.get(), var.dev_m.get(), var.dev_v.get(), var.size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), var.decay, step_size);
 #ifdef DEBUG_CUDA
         CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -75,8 +75,8 @@ void Adam::step()
 
     for (natural i = 0; i < vars.size(); i++)
     {
-        const natural n_blocks = std::min(CEIL(vars[i].size, N_THREADS), static_cast<natural>(N_BLOCKS));
-        adam_step_kernel<<<n_blocks, N_THREADS, 0, streams[i + 1].get()>>>(vars[i].dev_data.get(), vars[i].dev_grad.get(), vars[i].dev_m.get(), vars[i].dev_v.get(), vars[i].size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), vars[i].decay, step_size);
+        const natural n_blocks = std::min(CEIL(vars[i].size, CudaParams::N_THREADS), static_cast<natural>(CudaParams::N_BLOCKS));
+        adam_step_kernel<<<n_blocks, CudaParams::N_THREADS, 0, streams[i + 1].get()>>>(vars[i].dev_data.get(), vars[i].dev_grad.get(), vars[i].dev_m.get(), vars[i].dev_v.get(), vars[i].size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), vars[i].decay, step_size);
         cudaEventRecord(events[i].get(), streams[i + 1].get());
 #ifdef DEBUG_CUDA
         CHECK_CUDA_ERROR(cudaGetLastError());

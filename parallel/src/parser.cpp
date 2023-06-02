@@ -205,8 +205,9 @@ void parse_parameters(GetPot &datafile, GCNParams &params,
   cudaDeviceProp devProp;
   cudaGetDevice(&dev);
   cudaGetDeviceProperties(&devProp, dev);
-  N_BLOCKS = datafile("num_blocks_factor", 0) * devProp.multiProcessorCount;
-  N_THREADS = datafile("num_threads", 0);
+  CudaParams::N_BLOCKS =
+      datafile("num_blocks_factor", 0) * devProp.multiProcessorCount;
+  CudaParams::N_THREADS = datafile("num_threads", 0);
 
   if (print) {
     std::cout << "PARSED PARAMETERS FROM GETPOT" << std::endl;
@@ -226,8 +227,8 @@ void parse_parameters(GetPot &datafile, GCNParams &params,
     std::cout << "beta1: " << adam_params.beta1 << std::endl;
     std::cout << "beta2: " << adam_params.beta2 << std::endl;
     std::cout << "eps: " << adam_params.eps << std::endl;
-    std::cout << "num_blocks: " << N_BLOCKS << std::endl;
-    std::cout << "num_threads: " << N_THREADS << std::endl;
+    std::cout << "num_blocks: " << CudaParams::N_BLOCKS << std::endl;
+    std::cout << "num_threads: " << CudaParams::N_THREADS << std::endl;
     std::cout << std::endl;
   }
 }

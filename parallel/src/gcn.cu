@@ -129,16 +129,16 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
 
 // ##################################################################################
 
-__global__ void initialize_random_kernel(randState *dev_rand_states)
+__global__ void initialize_random_kernel(randState *dev_rand_states, const natural seed)
 {
     // curand_init(seed, index, offset, &state);
-    curand_init(SEED * threadIdx.x, threadIdx.x, threadIdx.x, &dev_rand_states[threadIdx.x]);
+    curand_init(seed * threadIdx.x, threadIdx.x, threadIdx.x, &dev_rand_states[threadIdx.x]);
 }
 
 void GCN::initialize_random()
 {
-    dev_rand_states = dev_shared_ptr<randState>(N_THREADS);
-    initialize_random_kernel<<<1, N_THREADS, 0, streams[0].get()>>>(dev_rand_states.get());
+    dev_rand_states = dev_shared_ptr<randState>(CudaParams::N_THREADS);
+    initialize_random_kernel<<<1, CudaParams::N_THREADS, 0, streams[0].get()>>>(dev_rand_states.get(), CudaParams::SEED);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -160,10 +160,10 @@ __global__ void set_input_kernel(real *dev_data, const real *dev_feature_value, 
 
 void GCN::set_input(smart_stream stream, bool first) const
 {
-    const natural n_blocks = std::min(CEIL(input->size, N_THREADS), N_BLOCKS);
+    const natural n_blocks = std::min(CEIL(input->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     if (!first)
         cudaStreamWaitEvent(stream.get(), events[2].get());
-    set_input_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
+    set_input_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -189,8 +189,8 @@ void GCN::set_truth(const natural current_split, smart_stream stream) const
     else if (current_split == 3)
         modules.back()->set_num_samples(params->test_dim);
 
-    const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), N_BLOCKS);
-    set_truth_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_truth.get(), dev_data.dev_split.get(), dev_data.dev_label.get(), params->num_nodes, current_split);
+    const natural n_blocks = std::min(CEIL(params->num_nodes, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    set_truth_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(dev_truth.get(), dev_data.dev_split.get(), dev_data.dev_label.get(), params->num_nodes, current_split);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -217,8 +217,8 @@ void GCN::get_l2_penalty(smart_stream stream) const
 {
     dev_l2.set_zero(stream);
     const auto &weights = variables[2];
-    const natural n_blocks = std::min(CEIL(weights->size, N_THREADS), N_BLOCKS);
-    get_l2_penalty_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_l2.get(), weights->dev_data.get(), weights->size);
+    const natural n_blocks = std::min(CEIL(weights->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    get_l2_penalty_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(dev_l2.get(), weights->dev_data.get(), weights->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -247,8 +247,8 @@ __global__ void get_accuracy_kernel(const integer *dev_truth, const real *dev_da
 void GCN::get_accuracy(smart_stream stream) const
 {
     dev_wrong.set_zero(stream);
-    const natural n_blocks = std::min(CEIL(params->num_nodes, N_THREADS), N_BLOCKS);
-    get_accuracy_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(dev_truth.get(), output->dev_data.get(), dev_wrong.get(), params->num_nodes, params->output_dim);
+    const natural n_blocks = std::min(CEIL(params->num_nodes, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    get_accuracy_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(dev_truth.get(), output->dev_data.get(), dev_wrong.get(), params->num_nodes, params->output_dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
