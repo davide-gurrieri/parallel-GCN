@@ -78,9 +78,14 @@ inline void print_cpu(const std::vector<real> &v, natural col)
 inline void print_gpu_info()
 {
   int dev;
-  cudaDeviceProp devProp;                 // C struct
+  cudaDeviceProp devProp; // C struct
+#ifdef DEBUG_CUDA
+  CHECK_CUDA_ERROR(cudaGetDevice(&dev));
+  CHECK_CUDA_ERROR(cudaGetDeviceProperties(&devProp, dev));
+#else
   cudaGetDevice(&dev);                    // Get the id of the currently used device
   cudaGetDeviceProperties(&devProp, dev); // Get the device properties
+#endif
 
   std::cout << std::endl;
   std::cout << "GPU INFORMATIONS:" << std::endl;
