@@ -1,6 +1,6 @@
 #ifndef SMART_OBJECT_CUH
 #define SMART_OBJECT_CUH
-#include <cuda_runtime.h>
+
 #include "../include/utils.cuh"
 
 /*
@@ -19,8 +19,23 @@ enum StreamPriority
 class smart_stream
 {
 public:
-    smart_stream() : refCount(new size_t(1)) { cudaStreamCreate(&object); }
-    explicit smart_stream(StreamPriority priority) : refCount(new size_t(1)) { cudaStreamCreateWithPriority(&object, cudaStreamDefault, priority); }
+    smart_stream() : refCount(new size_t(1))
+    {
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaStreamCreate(&object));
+#else
+        cudaStreamCreate(&object);
+#endif
+    }
+
+    explicit smart_stream(StreamPriority priority) : refCount(new size_t(1))
+    {
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaStreamCreateWithPriority(&object, cudaStreamDefault, priority));
+#else
+        cudaStreamCreateWithPriority(&object, cudaStreamDefault, priority);
+#endif
+    }
 
     smart_stream(const smart_stream &other)
         : object(other.object), refCount(other.refCount)
@@ -71,7 +86,11 @@ private:
         {
             delete refCount;
             if (object != nullptr)
+#ifdef DEBUG_CUDA
+                CHECK_CUDA_ERROR(cudaStreamDestroy(object));
+#else
                 cudaStreamDestroy(object);
+#endif
         }
     }
 };
@@ -79,7 +98,14 @@ private:
 class smart_event
 {
 public:
-    smart_event() : refCount(new size_t(1)) { cudaEventCreateWithFlags(&object, cudaEventDisableTiming); }
+    smart_event() : refCount(new size_t(1))
+    {
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaEventCreateWithFlags(&object, cudaEventDisableTiming));
+#else
+        cudaEventCreateWithFlags(&object, cudaEventDisableTiming);
+#endif
+    }
 
     smart_event(const smart_event &other)
         : object(other.object), refCount(other.refCount)
@@ -130,13 +156,14 @@ private:
         {
             delete refCount;
             if (object != nullptr)
+#ifdef DEBUG_CUDA
+                CHECK_CUDA_ERROR(cudaEventDestroy(object));
+#else
                 cudaEventDestroy(object);
+#endif
         }
     }
 };
-
-inline std::vector<smart_stream> streams;
-inline std::vector<smart_event> events;
 
 // events[0] -> layer1_weight update
 // events[1] -> layer2_weight update

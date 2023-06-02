@@ -6,6 +6,7 @@ dropout_input = 0.5
 dropout_layer1 = 0.5
 epochs = 1000
 early_stopping = 0
+n_layers = 2
 
 #-------------------------------------------------
 # Parameters for Adam

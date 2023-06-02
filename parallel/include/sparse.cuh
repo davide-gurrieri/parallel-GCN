@@ -25,6 +25,7 @@ public:
     dev_shared_ptr<natural> dev_indptr;
     natural indices_size;
     natural indptr_size;
+    DevSparseIndex() = default;
     DevSparseIndex(const SparseIndex &sparse_index);
 };
 

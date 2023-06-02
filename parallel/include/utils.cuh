@@ -73,13 +73,13 @@ inline void print_cpu(const std::vector<real> &v, natural col)
 }
 */
 
-inline natural print_gpu_info()
+inline void print_gpu_info()
 {
   int dev;
   cudaDeviceProp devProp;                 // C struct
   cudaGetDevice(&dev);                    // Get the id of the currently used device
   cudaGetDeviceProperties(&devProp, dev); // Get the device properties
-#ifndef TUNE
+
   std::cout << std::endl;
   std::cout << "GPU INFORMATIONS:" << std::endl;
   std::cout << "multiProcessorCount: " << devProp.multiProcessorCount
@@ -98,8 +98,35 @@ inline natural print_gpu_info()
   std::cout << "totalGlobalMem [MB]: " << devProp.totalGlobalMem / 1048576
             << std::endl;
   std::cout << std::endl;
-#endif
-  return devProp.multiProcessorCount;
+}
+
+#include <vector>
+#include <sstream>
+template <class T>
+std::vector<T> string2vec(const std::string &str, char sep = ',')
+{
+  std::vector<T> values;
+  std::istringstream iss(str);
+  std::string token;
+  while (std::getline(iss, token, sep))
+  {
+    T value;
+    if (std::is_same<T, int>::value)
+      value = std::stoi(token);
+    else if (std::is_same<T, float>::value)
+      value = std::stof(token);
+    else if (std::is_same<T, double>::value)
+      value = std::stod(token);
+    else if (std::is_same<T, unsigned>::value)
+      value = std::stoul(token);
+    else
+    {
+      std::cerr << "ERROR: type not supported" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    values.push_back(value);
+  }
+  return values;
 }
 
 #endif

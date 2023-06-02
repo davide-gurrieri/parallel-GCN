@@ -83,7 +83,7 @@ __global__ void dropout_kernel_backward(real *dev_grad, const bool *mask, const 
     }
 }
 
-void Dropout::backward() const
+void Dropout::backward(smart_stream backward_stream) const
 {
     if (!dev_mask.get())
         return;
@@ -92,7 +92,7 @@ void Dropout::backward() const
 
     const real scale = 1.0 / (1.0 - p);
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    dropout_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
+    dropout_kernel_backward<<<n_blocks, N_THREADS, 0, backward_stream.get()>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -103,7 +103,7 @@ void Dropout::backward() const
 // SPARSEMATMUL
 // ##################################################################################
 
-SparseMatmul::SparseMatmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Variable> c_, DevSparseIndex *sp_, natural m_, natural n_, natural p_) : a(a_), b(b_), c(c_), sp(sp_), m(m_), n(n_), p(p_) {}
+SparseMatmul::SparseMatmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Variable> c_, DevSparseIndex *sp_, natural m_, natural n_, natural p_, smart_event event1, smart_event event2) : a(a_), b(b_), c(c_), sp(sp_), m(m_), n(n_), p(p_), start_sparse_matmul_forward(event1), start_set_input(event2) {}
 
 // ##################################################################################
 
@@ -132,7 +132,7 @@ void SparseMatmul::forward(bool training, smart_stream stream) const
     // timer_start(TMR_SPMATMUL_FW);
 
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
-    cudaStreamWaitEvent(stream.get(), events[0].get());
+    cudaStreamWaitEvent(stream.get(), start_sparse_matmul_forward.get());
     sparse_matmul_kernel_forward<<<n_blocks, N_THREADS, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -164,15 +164,15 @@ __global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real
     }
 }
 
-void SparseMatmul::backward() const
+void SparseMatmul::backward(smart_stream backward_stream) const
 {
     // timer_start(TMR_SPMATMUL_BW);
 
-    b->zero_grad(streams[1]);
+    b->zero_grad(backward_stream);
     const natural n_blocks = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
-    sparse_matmul_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
+    sparse_matmul_kernel_backward<<<n_blocks, N_THREADS, 0, backward_stream.get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef FEATURE
-    cudaEventRecord(events[2].get(), streams[1].get());
+    cudaEventRecord(start_set_input.get(), backward_stream.get());
 #endif
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -184,7 +184,7 @@ void SparseMatmul::backward() const
 // GRAPHSUM
 // ##################################################################################
 
-GraphSum::GraphSum(shared_ptr<Variable> in_, shared_ptr<Variable> out_, DevSparseIndex *graph_, dev_shared_ptr<real> dev_graph_value_, natural dim_) : in(in_), out(out_), graph(graph_), dev_graph_value(dev_graph_value_), dim(dim_) {}
+GraphSum::GraphSum(shared_ptr<Variable> in_, shared_ptr<Variable> out_, DevSparseIndex *graph_, dev_shared_ptr<real> dev_graph_value_, natural dim_, smart_event event_) : in(in_), out(out_), graph(graph_), dev_graph_value(dev_graph_value_), dim(dim_), event(event_) {}
 
 // ##################################################################################
 
@@ -221,14 +221,14 @@ void GraphSum::forward(bool training, smart_stream stream) const
 
 // ###############################################################################
 
-void GraphSum::backward() const
+void GraphSum::backward(smart_stream backward_stream) const
 {
     // timer_start(TMR_GRAPHSUM_BW);
 
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, N_THREADS), N_BLOCKS);
-    graphsum_kernel<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
-    cudaEventRecord(events[4].get(), streams[1].get());
+    graphsum_kernel<<<n_blocks, N_THREADS, 0, backward_stream.get()>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
+    cudaEventRecord(event.get(), backward_stream.get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -286,12 +286,12 @@ __global__ void relu_kernel_backward(real *d_in_grad, const bool *d_mask, const 
     }
 }
 
-void ReLU::backward() const
+void ReLU::backward(smart_stream backward_stream) const
 {
     // timer_start(TMR_RELU_BW);
 
     const natural n_blocks = std::min(CEIL(in->size, N_THREADS), N_BLOCKS);
-    relu_kernel_backward<<<n_blocks, N_THREADS, 0, streams[1].get()>>>(in->dev_grad.get(), dev_mask.get(), in->size);
+    relu_kernel_backward<<<n_blocks, N_THREADS, 0, backward_stream.get()>>>(in->dev_grad.get(), dev_mask.get(), in->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -302,7 +302,7 @@ void ReLU::backward() const
 // MATMUL
 // ##################################################################################
 
-Matmul::Matmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Variable> c_, natural m_, natural n_, natural p_) : a(a_), b(b_), c(c_), m(m_), n(n_), p(p_) {}
+Matmul::Matmul(shared_ptr<Variable> a_, shared_ptr<Variable> b_, shared_ptr<Variable> c_, natural m_, natural n_, natural p_, smart_event event_forward_, smart_event event_backward_, smart_stream stream_) : a(a_), b(b_), c(c_), m(m_), n(n_), p(p_), event_forward(event_forward_), event_backward(event_backward_), my_stream(stream_) {}
 
 // ##################################################################################
 
@@ -357,7 +357,7 @@ void Matmul::forward(bool training, smart_stream stream) const
 
     const dim3 n_blocks(CEIL(p, TILE_DIM), CEIL(m, TILE_DIM));
     const dim3 n_threads(TILE_DIM, TILE_DIM);
-    cudaStreamWaitEvent(stream.get(), events[1].get());
+    cudaStreamWaitEvent(stream.get(), event_forward.get());
     matmul_kernel_forward<<<n_blocks, n_threads, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -450,7 +450,7 @@ __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, 
         b[row * p + col] = res;
 }
 
-void Matmul::backward() const
+void Matmul::backward(smart_stream backward_stream) const
 {
     // timer_start(TMR_MATMUL_BW);
 
@@ -460,12 +460,12 @@ void Matmul::backward() const
     dim3 n_blocks_1(CEIL(n, TILE_DIM), n_blocks_y_1);
     dim3 n_blocks_2(CEIL(p, TILE_DIM), CEIL(n, TILE_DIM));
     dim3 n_threads(TILE_DIM, TILE_DIM);
-    matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, streams[1].get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
+    matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, backward_stream.get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaStreamWaitEvent(streams[2].get(), events[4].get());
-    matmul_kernel_backward_2<<<n_blocks_2, n_threads, 0, streams[2].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
+    cudaStreamWaitEvent(my_stream.get(), event_backward.get());
+    matmul_kernel_backward_2<<<n_blocks_2, n_threads, 0, my_stream.get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -493,21 +493,21 @@ __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, 
     }
 }
 
-void Matmul::backward() const
+void Matmul::backward(smart_stream backward_stream) const
 {
     // timer_start(TMR_MATMUL_BW);
 
     const dim3 n_blocks_1(CEIL(n, TILE_DIM), CEIL(m, TILE_DIM));
     const dim3 n_threads(TILE_DIM, TILE_DIM);
-    matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, streams[1].get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
+    matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, backward_stream.get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
 
     const natural n_blocks_2 = std::min(CEIL(m * p, N_THREADS), N_BLOCKS);
-    cudaStreamWaitEvent(streams[2].get(), events[4].get());
-    b->zero_grad(streams[2]);
-    matmul_kernel_backward_2<<<n_blocks_2, N_THREADS, 0, streams[2].get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
+    cudaStreamWaitEvent(my_stream.get(), event_backward.get());
+    b->zero_grad(my_stream);
+    matmul_kernel_backward_2<<<n_blocks_2, N_THREADS, 0, my_stream.get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), m, n, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -518,7 +518,7 @@ void Matmul::backward() const
 // CROSSENTROPYLOSS
 // ##################################################################################
 
-CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, pinned_host_ptr<real> loss_, natural num_classes_) : logits(logits_), dev_truth(dev_truth_), loss(loss_), num_classes(num_classes_)
+CrossEntropyLoss::CrossEntropyLoss(shared_ptr<Variable> logits_, dev_shared_ptr<integer> dev_truth_, pinned_host_ptr<real> loss_, natural num_classes_, smart_event event) : logits(logits_), dev_truth(dev_truth_), loss(loss_), num_classes(num_classes_), start_backward(event)
 {
     dev_loss_res = dev_shared_ptr<real>(1);
 }
@@ -580,7 +580,7 @@ void CrossEntropyLoss::forward(bool training, smart_stream stream) const
     const natural n_blocks = std::min(CEIL(DIM, N_THREADS), N_BLOCKS);
     cross_entropy_loss_kernel<<<n_blocks, N_THREADS, 0, stream.get()>>>(logits->dev_data.get(), logits->dev_grad.get(), dev_truth.get(), dev_loss_res.get(), num_classes, DIM, num_samples, training);
     if (training)
-        cudaEventRecord(events[3].get(), stream.get());
+        cudaEventRecord(start_backward.get(), stream.get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -591,9 +591,9 @@ void CrossEntropyLoss::forward(bool training, smart_stream stream) const
 
 // ##################################################################################
 
-void CrossEntropyLoss::backward() const
+void CrossEntropyLoss::backward(smart_stream backward_stream) const
 {
-    cudaStreamWaitEvent(streams[1].get(), events[3].get());
+    cudaStreamWaitEvent(backward_stream.get(), start_backward.get());
 }
 
 // ##################################################################################

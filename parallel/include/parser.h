@@ -1,6 +1,7 @@
 #ifndef PARALLEL_GCN_PARSER_H
 #define PARALLEL_GCN_PARSER_H
 
+#include "../include/GetPot"
 #include "../include/gcn.cuh"
 #include "../include/sparse.cuh"
 #include <fstream>
@@ -25,5 +26,8 @@ private:
   void calculateGraphValues();
   bool isValidInput();
 };
+
+void parse_parameters(GetPot &datafile, GCNParams &params,
+                      AdamParams &adam_params, bool print = false);
 
 #endif // PARALLEL_GCN_PARSER_H

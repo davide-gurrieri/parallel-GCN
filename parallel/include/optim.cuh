@@ -37,10 +37,13 @@ class Adam
     dev_shared_ptr<real> weight_decay, beta1, beta2, eps;
     natural step_count;
     std::vector<AdamVariable> vars;
+    std::vector<smart_stream> backward_streams;
+    std::vector<smart_event> start_matmul_forward;
 
 public:
-    Adam() {}
-    Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, AdamParams const *params_);
+    Adam(){};
+    Adam(const std::vector<shared_ptr<Variable>> &weights, const std::vector<bool> &decays, AdamParams const *params_,
+         const std::vector<smart_stream> &backward_streams_, const std::vector<smart_event> &start_matmul_forward_);
     void step();
 };
 

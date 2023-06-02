@@ -151,6 +151,17 @@ public:
         // cudaDeviceSynchronize();
     }
 
+    void set_zero() const
+    {
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaMemset(ptr, 0, n_elements * sizeof(T)));
+#else
+        // cudaMemset(ptr, 0, n_elements * sizeof(T));
+        cudaMemset(ptr, 0, n_elements * sizeof(T));
+#endif
+        // cudaDeviceSynchronize();
+    }
+
     int get_n_elements() const
     {
         return n_elements;

@@ -1,6 +1,6 @@
 CXX=nvcc
-CXXFLAGS= -O3 -std=c++17 -rdc=true -arch=sm_75
-OPTIONAL_CXXFLAGS=-DDYNAMIC_INPUT -DDEBUG_CUDA -DFEATURE #-DTUNE
+CXXFLAGS= -std=c++17 -rdc=true -arch=sm_75 #-O3
+OPTIONAL_CXXFLAGS=-DDEBUG_CUDA -DFEATURE -G #-DTUNE -DDYNAMIC_INPUT
 CXXFILES=src/parser.cpp src/gcn.cu src/variable.cu src/module.cu src/timer.cpp src/sparse.cu src/optim.cu src/reduction.cu
 HFILES=include/gcn.cuh include/parser.h include/utils.cuh include/variable.cuh include/module.cuh include/timer.h include/sparse.cuh include/optim.cuh include/shared_ptr.cuh
 
