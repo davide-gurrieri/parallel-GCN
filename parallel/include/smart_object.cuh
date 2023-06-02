@@ -19,120 +19,36 @@ enum StreamPriority
 class smart_stream
 {
 public:
-    smart_stream() : refCount(new size_t(1)) { cudaStreamCreate(&object); }
-    explicit smart_stream(StreamPriority priority) : refCount(new size_t(1)) { cudaStreamCreateWithPriority(&object, cudaStreamDefault, priority); }
-
-    smart_stream(const smart_stream &other)
-        : object(other.object), refCount(other.refCount)
-    {
-        IncrementRefCount();
-    }
-
-    smart_stream &operator=(const smart_stream &other)
-    {
-        if (this != &other)
-        {
-            DecrementRefCount();
-            object = other.object;
-            refCount = other.refCount;
-            IncrementRefCount();
-        }
-        return *this;
-    }
-
-    ~smart_stream()
-    {
-        DecrementRefCount();
-    }
-
-    cudaStream_t get() const
-    {
-        return object;
-    }
-
-    size_t getRefCount() const
-    {
-        return *refCount;
-    }
+    smart_stream();
+    explicit smart_stream(StreamPriority priority);
+    smart_stream(const smart_stream &other);
+    smart_stream &operator=(const smart_stream &other);
+    ~smart_stream();
+    cudaStream_t get() const;
+    size_t getRefCount() const;
 
 private:
     cudaStream_t object;
     size_t *refCount;
-
-    void IncrementRefCount()
-    {
-        if (refCount)
-            ++(*refCount);
-    }
-
-    void DecrementRefCount()
-    {
-        if (refCount && --(*refCount) == 0)
-        {
-            delete refCount;
-            if (object != nullptr)
-                cudaStreamDestroy(object);
-        }
-    }
+    void IncrementRefCount();
+    void DecrementRefCount();
 };
 
 class smart_event
 {
 public:
-    smart_event() : refCount(new size_t(1)) { cudaEventCreateWithFlags(&object, cudaEventDisableTiming); }
-
-    smart_event(const smart_event &other)
-        : object(other.object), refCount(other.refCount)
-    {
-        IncrementRefCount();
-    }
-
-    smart_event &operator=(const smart_event &other)
-    {
-        if (this != &other)
-        {
-            DecrementRefCount();
-            object = other.object;
-            refCount = other.refCount;
-            IncrementRefCount();
-        }
-        return *this;
-    }
-
-    ~smart_event()
-    {
-        DecrementRefCount();
-    }
-
-    cudaEvent_t get() const
-    {
-        return object;
-    }
-
-    size_t getRefCount() const
-    {
-        return *refCount;
-    }
+    smart_event();
+    smart_event(const smart_event &other);
+    smart_event &operator=(const smart_event &other);
+    ~smart_event();
+    cudaEvent_t get() const;
+    size_t getRefCount() const;
 
 private:
     cudaEvent_t object;
     size_t *refCount;
-
-    void IncrementRefCount()
-    {
-        if (refCount)
-            ++(*refCount);
-    }
-
-    void DecrementRefCount()
-    {
-        if (refCount && --(*refCount) == 0)
-        {
-            delete refCount;
-            if (object != nullptr)
-                cudaEventDestroy(object);
-        }
-    }
+    void IncrementRefCount();
+    void DecrementRefCount();
 };
 
 inline std::vector<smart_stream> streams;
