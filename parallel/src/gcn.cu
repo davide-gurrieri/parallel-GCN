@@ -2,6 +2,15 @@
 
 // ##################################################################################
 
+GCNSmartObjects::GCNSmartObjects() : forward_training_stream(High), forward_evaluation_stream(High)
+{
+    backward_streams.emplace_back(High);
+    backward_streams.emplace_back(High);
+    start_matmul_forward.resize(2);
+}
+
+// ##################################################################################
+
 void GCNParams::print_info() const
 {
     std::cout << std::endl;
@@ -42,7 +51,7 @@ void GCN::insert_first_layer()
     // dropout
     variables.push_back(std::make_shared<Variable>(data->feature_index.indices.size(), false));
     input = variables.back();
-    set_input(streams[0], true);
+    set_input(smart_objects.forward_training_stream, true);
     modules.push_back(std::make_unique<Dropout>(input, params->dropouts.front(), dev_rand_states));
 #else
     // for compatibility
@@ -62,13 +71,13 @@ void GCN::insert_first_layer()
     dev_l2 = dev_shared_ptr<real>(1); // used by get_l2_penalty()
     pinned_l2 = pinned_host_ptr<real>(1);
 
-    modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dims.front()));
+    modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dims.front(), smart_objects.start_matmul_forward[0], smart_objects.start_set_input));
 
     // graph sum
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dims.front()));
     shared_ptr<Variable> layer1_var2 = variables.back();
 
-    modules.push_back(std::make_unique<GraphSum>(layer1_var1, layer1_var2, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->hidden_dims.front()));
+    modules.push_back(std::make_unique<GraphSum>(layer1_var1, layer1_var2, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->hidden_dims.front(), false, smart_objects.start_matmul_backward));
 
     // ReLU
     modules.push_back(std::make_unique<ReLU>(layer1_var2));
@@ -90,24 +99,19 @@ void GCN::insert_last_layer()
     // layer_last_weight->set_value(0.5, forward_training_stream);
     weights.push_back(layer_last_weight);
 
-    modules.push_back(std::make_unique<Matmul>(layer_prev_var2, layer_last_weight, layer_last_var1, params->num_nodes, params->hidden_dims.back(), params->output_dim));
+    modules.push_back(std::make_unique<Matmul>(layer_prev_var2, layer_last_weight, layer_last_var1, params->num_nodes, params->hidden_dims.back(), params->output_dim, smart_objects.start_matmul_forward[1], smart_objects.start_matmul_backward, smart_objects.backward_streams[1]));
 
     // graph sum
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
     output = variables.back();
-    modules.push_back(std::make_unique<GraphSum>(layer_last_var1, output, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->output_dim));
+    modules.push_back(std::make_unique<GraphSum>(layer_last_var1, output, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->output_dim, true, smart_objects.start_matmul_backward));
 
     // cross entropy loss
-    modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_truth, loss, params->output_dim));
+    modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_truth, loss, params->output_dim, smart_objects.start_backward));
 }
 
 GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_) : params(params_), adam_params(adam_params_), data(data_), dev_data{DevGCNData(*data_)}
 {
-    streams.emplace_back(High); // forward training + l2_loss + get_accuracy
-    streams.emplace_back(High); // backward + optimization 1
-    streams.emplace_back(High); // backard + optimization 2
-    streams.emplace_back(High); // forward evaluation
-    events.resize(5);
     initialize_random();
     dev_truth = dev_shared_ptr<integer>(params->num_nodes);
     dev_wrong = dev_shared_ptr<natural>(1); // used by get_accuracy()
@@ -124,7 +128,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     // optimizer
     std::vector<bool> decays(params->n_layers, false);
     decays.front() = true;
-    optimizer = Adam(weights, decays, adam_params);
+    optimizer = Adam(weights, decays, adam_params, smart_objects.backward_streams, smart_objects.start_matmul_forward, smart_objects.forward_training_stream);
 }
 
 // ##################################################################################
@@ -138,11 +142,11 @@ __global__ void initialize_random_kernel(randState *dev_rand_states, const natur
 void GCN::initialize_random()
 {
     dev_rand_states = dev_shared_ptr<randState>(CudaParams::N_THREADS);
-    initialize_random_kernel<<<1, CudaParams::N_THREADS, 0, streams[0].get()>>>(dev_rand_states.get(), CudaParams::SEED);
+    initialize_random_kernel<<<1, CudaParams::N_THREADS, 0, smart_objects.forward_training_stream.get()>>>(dev_rand_states.get(), CudaParams::SEED);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    cudaStreamSynchronize(streams[0].get());
+    cudaStreamSynchronize(smart_objects.forward_training_stream.get());
 }
 
 // ##################################################################################
@@ -162,7 +166,7 @@ void GCN::set_input(smart_stream stream, bool first) const
 {
     const natural n_blocks = std::min(CEIL(input->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     if (!first)
-        cudaStreamWaitEvent(stream.get(), events[2].get());
+        cudaStreamWaitEvent(stream.get(), smart_objects.start_set_input.get());
     set_input_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(input->dev_data.get(), dev_data.dev_feature_value.get(), input->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -222,7 +226,7 @@ void GCN::get_l2_penalty(smart_stream stream) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(streams[0].get());
+    // cudaStreamSynchronize(smart_objects.forward_training_stream.get());
     dev_l2.copy_to_host_async(pinned_l2.get(), stream);
 }
 
@@ -260,15 +264,15 @@ void GCN::get_accuracy(smart_stream stream) const
 std::pair<real, real> GCN::eval(const natural current_split) const
 {
 #ifdef FEATURE
-    set_input(streams[3], false);
+    set_input(smart_objects.forward_evaluation_stream, false);
 #endif
-    set_truth(current_split, streams[3]);
+    set_truth(current_split, smart_objects.forward_evaluation_stream);
     for (const auto &m : modules)
-        m->forward(false, streams[3]);
+        m->forward(false, smart_objects.forward_evaluation_stream);
 
-    get_l2_penalty(streams[3]);
-    get_accuracy(streams[3]);
-    return finalize(streams[3]);
+    get_l2_penalty(smart_objects.forward_evaluation_stream);
+    get_accuracy(smart_objects.forward_evaluation_stream);
+    return finalize(smart_objects.forward_evaluation_stream);
 }
 
 // ##################################################################################
@@ -276,15 +280,15 @@ std::pair<real, real> GCN::eval(const natural current_split) const
 std::pair<real, real> GCN::train_epoch()
 {
     // input set by constructor and by eval()
-    set_truth(1, streams[0]);         // get the true labels for the dataset with split == 1 (train)
-    for (const auto &m : modules)     // iterate over the layer applying a forward pass
-        m->forward(true, streams[0]); // true means train
+    set_truth(1, smart_objects.forward_training_stream);         // get the true labels for the dataset with split == 1 (train)
+    for (const auto &m : modules)                                // iterate over the layer applying a forward pass
+        m->forward(true, smart_objects.forward_training_stream); // true means train
 
-    get_l2_penalty(streams[0]);
-    get_accuracy(streams[0]);
+    get_l2_penalty(smart_objects.forward_training_stream);
+    get_accuracy(smart_objects.forward_training_stream);
 
     for (integer i = modules.size() - 1; i >= 0; i--)
-        modules[i]->backward(); // do a backward pass on the layers
+        modules[i]->backward(smart_objects.backward_streams[0]); // do a backward pass on the layers
 
     optimizer.step(); // apply a step of the adam optimization
 
@@ -308,7 +312,7 @@ std::pair<real, real> GCN::train_epoch()
      for (unsigned int i = 0; i < variables.size(); i++)
          variables[i]->save("variable" + std::to_string(i) + ".txt", "data", params->output_dim);
  */
-    return finalize(streams[0]);
+    return finalize(smart_objects.forward_training_stream);
 }
 
 // ##################################################################################

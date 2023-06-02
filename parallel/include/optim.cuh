@@ -26,7 +26,8 @@ public:
     dev_shared_ptr<real> dev_data, dev_grad, dev_m, dev_v;
     natural size;
     bool decay;
-    AdamVariable(shared_ptr<Variable>, bool);
+    smart_stream forward_training_stream;
+    AdamVariable(shared_ptr<Variable>, bool, smart_stream &forward_training_stream_);
 };
 
 // ##################################################################################
@@ -37,10 +38,14 @@ class Adam
     dev_shared_ptr<real> weight_decay, beta1, beta2, eps;
     natural step_count;
     std::vector<AdamVariable> vars;
+    smart_stream forward_training_stream;
+    std::vector<smart_stream> backward_streams;
+    std::vector<smart_event> start_matmul_forward;
 
 public:
     Adam() {}
-    Adam(const std::vector<shared_ptr<Variable>> &weights, const std::vector<bool> &decays, AdamParams const *params_);
+    Adam(const std::vector<shared_ptr<Variable>> &weights, const std::vector<bool> &decays, AdamParams const *params_,
+         const std::vector<smart_stream> &backward_streams_, std::vector<smart_event> &start_matmul_forward_, smart_stream &forward_training_stream_);
     void step();
 };
 

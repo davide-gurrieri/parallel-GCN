@@ -51,8 +51,8 @@ private:
     void DecrementRefCount();
 };
 
-inline std::vector<smart_stream> streams;
-inline std::vector<smart_event> events;
+// inline std::vector<smart_stream> streams;
+// inline std::vector<smart_event> events;
 
 // events[0] -> layer1_weight update
 // events[1] -> layer2_weight update

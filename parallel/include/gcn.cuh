@@ -20,6 +20,23 @@ using std::unique_ptr;
 
 // ##################################################################################
 
+class GCNSmartObjects
+{
+public:
+  smart_stream forward_training_stream;
+  smart_stream forward_evaluation_stream;
+  std::vector<smart_stream> backward_streams; // 2
+
+  smart_event start_backward;
+  smart_event start_set_input;
+  smart_event start_matmul_backward;
+  std::vector<smart_event> start_matmul_forward; // 2
+
+  GCNSmartObjects();
+};
+
+// ##################################################################################
+
 struct GCNParams
 {
   natural num_nodes, input_dim, output_dim;
@@ -65,6 +82,7 @@ public:
 
 class GCN
 {
+  GCNSmartObjects smart_objects;
   const GCNData *data;
   DevGCNData dev_data;
   std::vector<unique_ptr<Module>> modules;
