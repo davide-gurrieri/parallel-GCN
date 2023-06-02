@@ -40,7 +40,7 @@ class Adam
 
 public:
     Adam() {}
-    Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, AdamParams const *params_);
+    Adam(const std::vector<shared_ptr<Variable>> &weights, const std::vector<bool> &decays, AdamParams const *params_);
     void step();
 };
 

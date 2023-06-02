@@ -22,10 +22,12 @@ using std::unique_ptr;
 
 struct GCNParams
 {
-  natural num_nodes, input_dim, hidden_dim{16}, output_dim;
-  real dropout_input{0.5}, dropout_layer1{0.5};
+  natural num_nodes, input_dim, output_dim;
+  std::vector<natural> hidden_dims;
+  std::vector<real> dropouts;
   natural epochs{100}, early_stopping{0};
   natural train_dim{0}, val_dim{0}, test_dim{0};
+  natural n_layers{2};
   void print_info() const;
 };
 
@@ -68,6 +70,7 @@ class GCN
   std::vector<unique_ptr<Module>> modules;
   std::vector<shared_ptr<Variable>> variables;
   shared_ptr<Variable> input, output;
+  std::vector<shared_ptr<Variable>> weights;
   Adam optimizer;
   dev_shared_ptr<randState> dev_rand_states;
   dev_shared_ptr<integer> dev_truth;
@@ -88,6 +91,9 @@ class GCN
   std::pair<real, real> finalize(smart_stream stream) const;
   std::pair<real, real> train_epoch();
   std::pair<real, real> eval(const natural current_split) const;
+
+  void insert_first_layer();
+  void insert_last_layer();
 
 public:
   const GCNParams *params;

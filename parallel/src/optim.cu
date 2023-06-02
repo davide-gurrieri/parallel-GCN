@@ -15,10 +15,16 @@ AdamVariable::AdamVariable(shared_ptr<Variable> var, bool decay_) : dev_data(var
 
 // ##################################################################################
 
-Adam::Adam(const std::vector<std::pair<shared_ptr<Variable>, bool>> &vars_, AdamParams const *params_) : params(params_), step_count(0)
+Adam::Adam(const std::vector<shared_ptr<Variable>> &weights, const std::vector<bool> &decays, AdamParams const *params_) : params(params_), step_count(0)
 {
-    for (const auto &v : vars_)
-        vars.emplace_back(v.first, v.second);
+    if (weights.size() != decays.size())
+    {
+        std::cout << "Error in Adam constructor: weights and decays must have the same size" << std::endl;
+        exit(1);
+    }
+
+    for (natural i = 0; i < weights.size(); i++)
+        vars.emplace_back(weights[i], decays[i]);
 
     weight_decay = dev_shared_ptr<real>(1);
     beta1 = dev_shared_ptr<real>(1);

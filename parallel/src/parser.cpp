@@ -174,3 +174,60 @@ bool Parser::parse() {
   this->calculateGraphValues();
   return true;
 }
+
+void parse_parameters(GetPot &datafile, GCNParams &params,
+                      AdamParams &adam_params, bool print) {
+  // GCNParams
+  params.n_layers = datafile("n_layers", 0);
+  params.hidden_dims = string2vec<natural>(datafile("hidden_dims", ""));
+  if (params.hidden_dims.size() != params.n_layers - 1) {
+    std::cerr << "Number of hidden dimensions must be 1 - n_layers"
+              << std::endl;
+    exit(1);
+  }
+  params.dropouts = string2vec<real>(datafile("dropouts", ""));
+  if (params.dropouts.size() != params.n_layers) {
+    std::cerr << "Number of dropouts must match number of layers" << std::endl;
+    exit(1);
+  }
+  params.epochs = datafile("epochs", 0);
+  params.early_stopping = datafile("early_stopping", 0);
+
+  // AdamParams
+  adam_params.learning_rate = datafile("learning_rate", 0.0);
+  adam_params.weight_decay = datafile("weight_decay", 0.0);
+  adam_params.beta1 = datafile("beta1", 0.0);
+  adam_params.beta2 = datafile("beta2", 0.0);
+  adam_params.eps = datafile("eps", 0.0);
+
+  // CudaParams
+  int dev;
+  cudaDeviceProp devProp;
+  cudaGetDevice(&dev);
+  cudaGetDeviceProperties(&devProp, dev);
+  N_BLOCKS = datafile("num_blocks_factor", 0) * devProp.multiProcessorCount;
+  N_THREADS = datafile("num_threads", 0);
+
+  if (print) {
+    std::cout << "PARSED PARAMETERS FROM GETPOT" << std::endl;
+    std::cout << "n_layers: " << params.n_layers << std::endl;
+    std::cout << "hidden_dims: ";
+    for (auto i : params.hidden_dims)
+      std::cout << i << " ";
+    std::cout << std::endl;
+    std::cout << "dropouts: ";
+    for (auto i : params.dropouts)
+      std::cout << i << " ";
+    std::cout << std::endl;
+    std::cout << "epochs: " << params.epochs << std::endl;
+    std::cout << "early_stopping: " << params.early_stopping << std::endl;
+    std::cout << "learning_rate: " << adam_params.learning_rate << std::endl;
+    std::cout << "weight_decay: " << adam_params.weight_decay << std::endl;
+    std::cout << "beta1: " << adam_params.beta1 << std::endl;
+    std::cout << "beta2: " << adam_params.beta2 << std::endl;
+    std::cout << "eps: " << adam_params.eps << std::endl;
+    std::cout << "num_blocks: " << N_BLOCKS << std::endl;
+    std::cout << "num_threads: " << N_THREADS << std::endl;
+    std::cout << std::endl;
+  }
+}

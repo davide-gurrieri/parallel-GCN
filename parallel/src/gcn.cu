@@ -5,7 +5,7 @@
 void GCNParams::print_info() const
 {
     std::cout << std::endl;
-    std::cout << "PARSED PARAMETERS:" << std::endl;
+    std::cout << "PARSED PARAMETERS FROM DATA:" << std::endl;
     std::cout << "Number of nodes: " << num_nodes << std::endl;
     std::cout << "Number of features: " << input_dim << std::endl;
     std::cout << "Number of labels: " << output_dim << std::endl;
@@ -36,6 +36,71 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex
 
 // ##################################################################################
 
+void GCN::insert_first_layer()
+{
+#ifdef FEATURE
+    // dropout
+    variables.push_back(std::make_shared<Variable>(data->feature_index.indices.size(), false));
+    input = variables.back();
+    set_input(streams[0], true);
+    modules.push_back(std::make_unique<Dropout>(input, params->dropouts.front(), dev_rand_states));
+#else
+    // for compatibility
+    variables.push_back(std::make_shared<Variable>());
+    input = variables.back();
+#endif
+
+    // sparse matmul
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dims.front()));
+    shared_ptr<Variable> layer1_var1 = variables.back();
+
+    variables.push_back(std::make_shared<Variable>(params->input_dim * params->hidden_dims.front(), true, dev_rand_states));
+    shared_ptr<Variable> layer1_weight = variables.back();
+    layer1_weight->glorot(params->input_dim, params->hidden_dims.front());
+    // layer1_weight->set_value(0.5, forward_training_stream);
+    weights.push_back(layer1_weight);
+    dev_l2 = dev_shared_ptr<real>(1); // used by get_l2_penalty()
+    pinned_l2 = pinned_host_ptr<real>(1);
+
+    modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dims.front()));
+
+    // graph sum
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dims.front()));
+    shared_ptr<Variable> layer1_var2 = variables.back();
+
+    modules.push_back(std::make_unique<GraphSum>(layer1_var1, layer1_var2, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->hidden_dims.front()));
+
+    // ReLU
+    modules.push_back(std::make_unique<ReLU>(layer1_var2));
+}
+
+void GCN::insert_last_layer()
+{
+    // dropout
+    shared_ptr<Variable> layer_prev_var2 = variables.back();
+    modules.push_back(std::make_unique<Dropout>(layer_prev_var2, params->dropouts.back(), dev_rand_states));
+
+    // dense matmul
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
+    shared_ptr<Variable> layer_last_var1 = variables.back();
+
+    variables.push_back(std::make_shared<Variable>(params->hidden_dims.back() * params->output_dim, true, dev_rand_states));
+    shared_ptr<Variable> layer_last_weight = variables.back();
+    layer_last_weight->glorot(params->hidden_dims.back(), params->output_dim);
+    // layer_last_weight->set_value(0.5, forward_training_stream);
+    weights.push_back(layer_last_weight);
+
+    modules.push_back(std::make_unique<Matmul>(layer_prev_var2, layer_last_weight, layer_last_var1, params->num_nodes, params->hidden_dims.back(), params->output_dim));
+
+    // graph sum
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
+    output = variables.back();
+    modules.push_back(std::make_unique<GraphSum>(layer_last_var1, output, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->output_dim));
+
+    // cross entropy loss
+    modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_truth, loss, params->output_dim));
+}
+
 GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_) : params(params_), adam_params(adam_params_), data(data_), dev_data{DevGCNData(*data_)}
 {
     streams.emplace_back(High); // forward training + l2_loss + get_accuracy
@@ -51,65 +116,15 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
 
     modules.reserve(8);
     variables.reserve(7);
+    weights.reserve(params->n_layers);
 
-#ifdef FEATURE
-    // dropout
-    variables.push_back(std::make_shared<Variable>(data_->feature_index.indices.size(), false));
-    input = variables.back();
-    set_input(streams[0], true);
-    modules.push_back(std::make_unique<Dropout>(input, params->dropout_input, dev_rand_states));
-#else
-    // for compatibility
-    variables.push_back(std::make_shared<Variable>());
-    input = variables.back();
-#endif
-
-    // sparse matmul
-    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dim));
-    shared_ptr<Variable> layer1_var1 = variables.back();
-
-    variables.push_back(std::make_shared<Variable>(params->input_dim * params->hidden_dim, true, dev_rand_states));
-    shared_ptr<Variable> layer1_weight = variables.back();
-    layer1_weight->glorot(params->input_dim, params->hidden_dim);
-    // layer1_weight->set_value(0.5, streams[0]);
-    dev_l2 = dev_shared_ptr<real>(1); // used by get_l2_penalty()
-    pinned_l2 = pinned_host_ptr<real>(1);
-
-    modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dim));
-
-    // graph sum
-    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dim));
-    shared_ptr<Variable> layer1_var2 = variables.back();
-
-    modules.push_back(std::make_unique<GraphSum>(layer1_var1, layer1_var2, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->hidden_dim));
-
-    // ReLU
-    modules.push_back(std::make_unique<ReLU>(layer1_var2));
-
-    // dropout
-    modules.push_back(std::make_unique<Dropout>(layer1_var2, params->dropout_layer1, dev_rand_states));
-
-    // dense matmul
-    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
-    shared_ptr<Variable> layer2_var1 = variables.back();
-
-    variables.push_back(std::make_shared<Variable>(params->hidden_dim * params->output_dim, true, dev_rand_states));
-    shared_ptr<Variable> layer2_weight = variables.back();
-    layer2_weight->glorot(params->hidden_dim, params->output_dim);
-    // layer2_weight->set_value(0.5, streams[0]);
-
-    modules.push_back(std::make_unique<Matmul>(layer1_var2, layer2_weight, layer2_var1, params->num_nodes, params->hidden_dim, params->output_dim));
-
-    // graph sum
-    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
-    output = variables.back();
-    modules.push_back(std::make_unique<GraphSum>(layer2_var1, output, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->output_dim));
-
-    // cross entropy loss
-    modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_truth, loss, params->output_dim));
+    insert_first_layer();
+    insert_last_layer();
 
     // optimizer
-    optimizer = Adam({{layer1_weight, true}, {layer2_weight, false}}, adam_params);
+    std::vector<bool> decays(params->n_layers, false);
+    decays.front() = true;
+    optimizer = Adam(weights, decays, adam_params);
 }
 
 // ##################################################################################
