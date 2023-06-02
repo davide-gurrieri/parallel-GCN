@@ -73,7 +73,7 @@ void Adam::step()
     }
     */
 
-    for (natural i = 1; i < vars.size(); i++)
+    for (natural i = 0; i < vars.size(); i++)
     {
         const natural n_blocks = std::min(CEIL(vars[i].size, N_THREADS), static_cast<natural>(N_BLOCKS));
         adam_step_kernel<<<n_blocks, N_THREADS, 0, backward_streams[i].get()>>>(vars[i].dev_data.get(), vars[i].dev_grad.get(), vars[i].dev_m.get(), vars[i].dev_v.get(), vars[i].size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), vars[i].decay, step_size);

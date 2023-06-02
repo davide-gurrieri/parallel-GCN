@@ -144,7 +144,7 @@ void GCN::insert_layer(const natural input_dim, const natural output_dim, const 
 GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_) : params(params_), adam_params(adam_params_), data(data_), dev_data{DevGCNData(*data_)}
 {
     smart_objects = GCNSmartObjects(params->n_layers);
-    std::cout << "QUI OK" << std::endl;
+
     initialize_random();
 
     dev_truth = dev_shared_ptr<integer>(params->num_nodes);
@@ -162,7 +162,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
 
     // add layer 1 to n_layers - 2
     for (natural i = 1; i < params->n_layers - 1; ++i)
-        insert_layer(params->hidden_dims[i - 2], params->hidden_dims[i - 1], params->dropouts[i - 1], i);
+        insert_layer(params->hidden_dims[i - 1], params->hidden_dims[i], params->dropouts[i], i);
 
     // add layer n_layers -1
     insert_last_layer();
