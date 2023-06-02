@@ -32,9 +32,9 @@ __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, const ran
 // needs curandStatePhilox4_32_10_t
 /*
 __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, const randState *dev_rand_states,
-                                       const natural size, const real p, const real scale, const natural n_threads)
+                                       const natural size, const real p, const real scale)
 {
-    __shared__ randState s_rand_states[n_threads];
+    extern __shared__ randState s_rand_states[];
     s_rand_states[threadIdx.x] = dev_rand_states[threadIdx.x];
     natural id = 4 * (blockIdx.x * blockDim.x + threadIdx.x);
 
@@ -64,8 +64,8 @@ void Dropout::forward(bool training, const smart_stream &stream) const
 
     // timer_start(TMR_DROPOUT_FW);
     const real scale = 1.0 / (1.0 - p);
-    const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
-    dropout_kernel_forward<<<n_blocks, CudaParams::N_THREADS, CudaParams::N_THREADS * sizeof(randState), stream.get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
+    const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS_DROPOUT), CudaParams::N_BLOCKS);
+    dropout_kernel_forward<<<n_blocks, CudaParams::N_THREADS_DROPOUT, CudaParams::N_THREADS_DROPOUT * sizeof(randState), stream.get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif

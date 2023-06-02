@@ -16,7 +16,7 @@ public:
     natural size;
     dev_shared_ptr<randState> dev_rand_states;
 
-    Variable(const natural size_, const bool requires_grad = true, const dev_shared_ptr<randState> dev_rand_states_ = dev_shared_ptr<randState>());
+    Variable(const natural size_, const bool requires_grad = true, const bool weights = false);
     Variable() = default;
     void print(const std::string &what, natural col) const;
     void save(const std::string &file_name, const std::string &what, natural col) const;

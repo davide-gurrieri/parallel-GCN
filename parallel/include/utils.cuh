@@ -10,13 +10,14 @@
 using natural = unsigned;
 using integer = int;
 using real = float;
-using randState = curandState_t;
+using randState = curandStateXORWOW;
+// using randState = curandState;
 // using randState = curandStatePhilox4_32_10_t;
 
 namespace CudaParams
 {
   inline natural N_THREADS;
-  // constexpr natural N_THREADS_DROPOUT = 1024;
+  constexpr natural N_THREADS_DROPOUT = 32;
   inline natural N_BLOCKS; // 8 * 16 with 16 number of SM (multiProcessorCount)
   constexpr natural TILE_DIM = 16;
   constexpr natural SEED = 42;

@@ -2,7 +2,15 @@
 
 // ##################################################################################
 
-Variable::Variable(const natural size_, const bool requires_grad, const dev_shared_ptr<randState> dev_rand_states_) : size(size_)
+__global__ void initialize_var_random_kernel(randState *dev_rand_states, const natural seed, const natural size)
+{
+    natural id = blockIdx.x * blockDim.x + threadIdx.x;
+#pragma unroll
+    for (natural i = id; i < size; i += blockDim.x * gridDim.x)
+        curand_init(seed, i, 0, &dev_rand_states[i]); // curand_init(seed, sequence, offset, &state);
+}
+
+Variable::Variable(const natural size_, const bool requires_grad, const bool weights) : size(size_)
 {
     dev_data = dev_shared_ptr<real>(size);
     if (requires_grad)
@@ -10,12 +18,16 @@ Variable::Variable(const natural size_, const bool requires_grad, const dev_shar
     else
         dev_grad = dev_shared_ptr<real>();
 
-    if (dev_rand_states_.get())
-        dev_rand_states = dev_rand_states_;
-    else
-        dev_rand_states = dev_shared_ptr<randState>();
+    if (weights)
+    {
+        dev_rand_states = dev_shared_ptr<randState>(size);
 
-    // std::cout << "Variable created with size " << size << std::endl;
+        const natural n_blocks = std::min(CEIL(size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+        initialize_var_random_kernel<<<n_blocks, CudaParams::N_THREADS>>>(dev_rand_states.get(), CudaParams::SEED, size);
+#ifdef DEBUG_CUDA
+        CHECK_CUDA_ERROR(cudaGetLastError());
+#endif
+    }
 }
 
 // ##################################################################################
@@ -25,13 +37,21 @@ __global__ void glorot_kernel(real *data, const natural size, const double scale
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
     for (natural i = id; i < size; i += blockDim.x * gridDim.x)
-        data[i] = (curand_uniform(&state[i % blockDim.x]) - 0.5) * scale;
+        data[i] = (curand_uniform(&state[i]) - 0.5) * scale;
 }
 
 void Variable::glorot(const natural in_size, const natural out_size) const
 {
+
+    if (!dev_rand_states.get())
+    {
+        std::cerr << "Variable::glorot: Variable must be initialized with weights = true" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
     const double range = sqrtf(6.0f / (in_size + out_size));
     const double scale = range * 2;
+
     const natural n_blocks = std::min(CEIL(size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     glorot_kernel<<<n_blocks, CudaParams::N_THREADS>>>(dev_data.get(), size, scale, dev_rand_states.get());
 #ifdef DEBUG_CUDA

@@ -63,10 +63,10 @@ void GCN::insert_first_layer()
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dims.front()));
     shared_ptr<Variable> layer1_var1 = variables.back();
 
-    variables.push_back(std::make_shared<Variable>(params->input_dim * params->hidden_dims.front(), true, dev_rand_states));
+    variables.push_back(std::make_shared<Variable>(params->input_dim * params->hidden_dims.front(), true, true));
     shared_ptr<Variable> layer1_weight = variables.back();
     layer1_weight->glorot(params->input_dim, params->hidden_dims.front());
-    // layer1_weight->set_value(0.5, forward_training_stream);
+    // layer1_weight->set_value(0.5, smart_objects.forward_training_stream);
     weights.push_back(layer1_weight);
     dev_l2 = dev_shared_ptr<real>(1); // used by get_l2_penalty()
     pinned_l2 = pinned_host_ptr<real>(1);
@@ -93,10 +93,10 @@ void GCN::insert_last_layer()
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
     shared_ptr<Variable> layer_last_var1 = variables.back();
 
-    variables.push_back(std::make_shared<Variable>(params->hidden_dims.back() * params->output_dim, true, dev_rand_states));
+    variables.push_back(std::make_shared<Variable>(params->hidden_dims.back() * params->output_dim, true, true));
     shared_ptr<Variable> layer_last_weight = variables.back();
     layer_last_weight->glorot(params->hidden_dims.back(), params->output_dim);
-    // layer_last_weight->set_value(0.5, forward_training_stream);
+    // layer_last_weight->set_value(0.5, smart_objects.forward_training_stream);
     weights.push_back(layer_last_weight);
 
     modules.push_back(std::make_unique<Matmul>(layer_prev_var2, layer_last_weight, layer_last_var1, params->num_nodes, params->hidden_dims.back(), params->output_dim, smart_objects.start_matmul_forward[1], smart_objects.start_matmul_backward, smart_objects.backward_streams[1]));
@@ -136,13 +136,13 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
 __global__ void initialize_random_kernel(randState *dev_rand_states, const natural seed)
 {
     // curand_init(seed, index, offset, &state);
-    curand_init(seed * threadIdx.x, threadIdx.x, threadIdx.x, &dev_rand_states[threadIdx.x]);
+    curand_init(seed * threadIdx.x, threadIdx.x, 0, &dev_rand_states[threadIdx.x]);
 }
 
 void GCN::initialize_random()
 {
-    dev_rand_states = dev_shared_ptr<randState>(CudaParams::N_THREADS);
-    initialize_random_kernel<<<1, CudaParams::N_THREADS, 0, smart_objects.forward_training_stream.get()>>>(dev_rand_states.get(), CudaParams::SEED);
+    dev_rand_states = dev_shared_ptr<randState>(CudaParams::N_THREADS_DROPOUT);
+    initialize_random_kernel<<<1, CudaParams::N_THREADS_DROPOUT, 0, smart_objects.forward_training_stream.get()>>>(dev_rand_states.get(), CudaParams::SEED);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
