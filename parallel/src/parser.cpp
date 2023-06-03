@@ -131,18 +131,51 @@ void Parser::parseSplit() {
   }
 }
 
+// Function to calculate the local clustering coefficient for a given node
+real Parser::local_clustering_coefficient(natural node) {
+  auto &rowPtr = this->gcnData->graph.indptr;
+  auto &colIndex = this->gcnData->graph.indices;
+  const natural start = rowPtr[node];
+  const natural end = rowPtr[node + 1];
+  const natural edges = end - start;
+  natural triangles = 0;
+  real clusteringCoefficient = 0.0;
+  // Count the number of edges and triangles for the node
+  if (edges <= 1)
+    return 0.0;
+
+  for (natural i = start; i < end; ++i) {
+    natural neighbor = colIndex[i];
+    for (natural j = rowPtr[neighbor]; j < rowPtr[neighbor + 1]; ++j) {
+      natural neighborOfNeighbor = colIndex[j];
+      if (neighborOfNeighbor == node)
+        continue;
+      bool finded = false;
+      for (natural k = start; k < end && !finded; ++k)
+        if (colIndex[k] == neighborOfNeighbor) {
+          triangles++;
+          finded = true;
+        }
+    }
+  }
+  return static_cast<real>(triangles) / (edges * (edges - 1));
+}
+
 void Parser::calculateGraphValues() {
   auto &graph_idx = this->gcnData->graph;
   auto &graph_val = this->gcnData->graph_value;
 
-  graph_val.resize(graph_idx.indices.size());
+  graph_val.resize(graph_idx.indices.size(), 1.);
   // iterate over the nodes
+  natural temp = 0;
   for (int src = 0; src < graph_idx.indptr.size() - 1; src++) {
     for (int i = graph_idx.indptr[src]; i < graph_idx.indptr[src + 1]; i++) {
       int dst = graph_idx.indices[i];
-      graph_val[i] =
-          1.0 / sqrtf((graph_idx.indptr[src + 1] - graph_idx.indptr[src]) *
-                      (graph_idx.indptr[dst + 1] - graph_idx.indptr[dst]));
+      if (src == dst)
+        graph_val[i] += 1; // graph_val[i] += local_clustering_coefficient[src];
+      graph_val[i] /=
+          sqrtf((graph_idx.indptr[src + 1] - graph_idx.indptr[src]) *
+                (graph_idx.indptr[dst + 1] - graph_idx.indptr[dst]));
     }
   }
 }

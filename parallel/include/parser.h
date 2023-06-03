@@ -24,6 +24,7 @@ private:
   void parseNode();
   void parseSplit();
   void calculateGraphValues();
+  real local_clustering_coefficient(natural node);
   bool isValidInput();
 };
 
