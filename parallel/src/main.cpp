@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
 
 // setbuf(stdout, NULL);
 //  Print device informations
-#ifndef TUNE
+#ifndef TUNE_CUDA
   print_gpu_info();
 #endif
 
@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
   AdamParams adam_params;
   GetPot command_line(argc, argv);
 
-#ifdef TUNE
+#ifdef TUNE_CUDA
   const std::string file_name = command_line("file", "./parameters.txt");
 #else
   const std::string name =
@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
   GetPot datafile(file_name.c_str());
 
 // Parse parameters
-#ifdef TUNE
+#ifdef TUNE_CUDA
   parse_parameters(datafile, params, adam_params, false);
 #else
   parse_parameters(datafile, params, adam_params, true);
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
   }
 
 // print parsed parameters
-#ifndef TUNE
+#ifndef TUNE_CUDA
   params.print_info();
 #endif
 

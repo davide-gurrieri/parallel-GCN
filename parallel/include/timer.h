@@ -4,7 +4,8 @@
 #include <chrono>
 #include <vector>
 
-typedef enum {
+typedef enum
+{
   TMR_TRAIN = 0,
   TMR_TEST,
   TMR_MATMUL_FW,
@@ -27,10 +28,10 @@ void timer_start(timer_instance t);
 float timer_stop(timer_instance t);
 float timer_total(timer_instance t);
 
-#define PRINT_TIMER_AVERAGE(T, E)                                              \
+#define PRINT_TIMER_AVERAGE(T, E) \
   printf(#T " average time: %.3fms\n", timer_total(T) * 1000 / E)
 
-#define PRINT_TIMER_AVERAGE_TUNE(T, E)                                         \
+#define PRINT_TIMER_AVERAGE_TUNE_CUDA(T, E) \
   printf("%.3f\n", timer_total(T) * 1000 / E)
 
 #endif

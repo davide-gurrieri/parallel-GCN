@@ -370,7 +370,7 @@ void GCN::run()
         real val_loss{0.f}, val_acc{0.f};
         // eval the model at the current step in order to obtain the val_loss and val_accuracy
         std::tie(val_loss, val_acc) = eval(2);
-#ifndef TUNE
+#ifndef TUNE_CUDA
         const auto time = timer_stop(TMR_TRAIN);
         printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f time=%.5f\n",
                epoch, train_loss, train_acc, val_loss, val_acc, time);
@@ -397,10 +397,10 @@ void GCN::run()
         }
     }
     timer_stop(TMR_TOTAL);
-#ifndef TUNE
+#ifndef TUNE_CUDA
     PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
 #else
-    PRINT_TIMER_AVERAGE_TUNE(TMR_TRAIN, epoch);
+    PRINT_TIMER_AVERAGE_TUNE_CUDA(TMR_TRAIN, epoch);
 #endif
 
     /*
@@ -417,7 +417,7 @@ void GCN::run()
     PRINT_TIMER_AVERAGE(TMR_LOSS_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_OPTIMIZER, epoch);
     */
-#ifndef TUNE
+#ifndef TUNE_CUDA
     real test_loss, test_acc;
     timer_start(TMR_TEST);
     std::tie(test_loss, test_acc) = eval(3); // eval the model on the test set
