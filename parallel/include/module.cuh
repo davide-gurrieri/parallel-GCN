@@ -147,4 +147,22 @@ public:
 
 // ##################################################################################
 
+#ifdef RESIDUAL_CONNECTIONS
+// ! works only if hidden dimension are the same
+class ResidualConnection : public Module
+{
+    shared_ptr<Variable> prev, current;
+    natural size;
+
+public:
+    ResidualConnection(shared_ptr<Variable> prev_, shared_ptr<Variable> current_);
+    ~ResidualConnection(){};
+    void forward(bool, const smart_stream &) const; // current = current + prev
+    void backward(const smart_stream &) const {};
+};
+
+#endif
+
+// ##################################################################################
+
 #endif

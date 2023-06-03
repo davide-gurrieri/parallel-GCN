@@ -600,3 +600,37 @@ natural CrossEntropyLoss::get_num_samples() const
 {
     return num_samples;
 };
+
+// ##################################################################################
+
+#ifdef RESIDUAL_CONNECTIONS
+ResidualConnection::ResidualConnection(shared_ptr<Variable> prev_, shared_ptr<Variable> current_) : prev(prev_), current(current_)
+{
+    if (prev->size != current->size)
+    {
+        std::cerr << "ResidualConnection: prev and current must have the same size" << std::endl;
+        exit(1);
+    }
+    size = prev->size;
+}
+
+// ##################################################################################
+
+__global__ void residual_connection_kernel(const real *prev, real *current, const natural size)
+{
+    natural id = blockIdx.x * blockDim.x + threadIdx.x;
+    for (natural i = id; i < size; i += blockDim.x * gridDim.x)
+        current[i] += prev[i];
+}
+
+void ResidualConnection::forward(bool training, const smart_stream &stream) const
+{
+    const natural n_blocks = std::min(CEIL(size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    residual_connection_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(prev->dev_data.get(), current->dev_data.get(), size);
+#ifdef DEBUG_CUDA
+    CHECK_CUDA_ERROR(cudaGetLastError());
+#endif
+}
+
+// ##################################################################################
+#endif
