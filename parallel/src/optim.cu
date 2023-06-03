@@ -72,12 +72,20 @@ void Adam::step()
 #endif
     }
     */
+    natural i = 0;
+    const natural n_blocks = std::min(CEIL(vars[i].size, CudaParams::N_THREADS), static_cast<natural>(CudaParams::N_BLOCKS));
+    adam_step_kernel<<<n_blocks, CudaParams::N_THREADS, 0, backward_streams[i].get()>>>(vars[i].dev_data.get(), vars[i].dev_grad.get(), vars[i].dev_m.get(), vars[i].dev_v.get(), vars[i].size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), vars[i].decay, step_size);
+    cudaEventRecord(start_matmul_forward[i].get(), backward_streams[i].get());
+#ifdef DEBUG_CUDA
+    CHECK_CUDA_ERROR(cudaGetLastError());
+#endif
+    i++;
 
-    for (natural i = 0; i < vars.size(); i++)
+    for (; i < vars.size(); i++)
     {
         const natural n_blocks = std::min(CEIL(vars[i].size, CudaParams::N_THREADS), static_cast<natural>(CudaParams::N_BLOCKS));
-        adam_step_kernel<<<n_blocks, CudaParams::N_THREADS, 0, backward_streams[i].get()>>>(vars[i].dev_data.get(), vars[i].dev_grad.get(), vars[i].dev_m.get(), vars[i].dev_v.get(), vars[i].size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), vars[i].decay, step_size);
-        cudaEventRecord(start_matmul_forward[i].get(), backward_streams[i].get());
+        adam_step_kernel<<<n_blocks, CudaParams::N_THREADS, 0, backward_streams[1].get()>>>(vars[i].dev_data.get(), vars[i].dev_grad.get(), vars[i].dev_m.get(), vars[i].dev_v.get(), vars[i].size, weight_decay.get(), beta1.get(), beta2.get(), eps.get(), vars[i].decay, step_size);
+        cudaEventRecord(start_matmul_forward[i].get(), backward_streams[1].get());
 #ifdef DEBUG_CUDA
         CHECK_CUDA_ERROR(cudaGetLastError());
 #endif

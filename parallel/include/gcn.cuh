@@ -29,10 +29,10 @@ public:
 
   smart_event start_backward;
   smart_event start_set_input;
-  smart_event start_matmul_backward;
-  std::vector<smart_event> start_matmul_forward; // 2
+  std::vector<smart_event> start_matmul_backward; // L - 1
+  std::vector<smart_event> start_matmul_forward;  // L
 
-  GCNSmartObjects();
+  explicit GCNSmartObjects(const natural n_layers);
 };
 
 // ##################################################################################
@@ -83,12 +83,14 @@ public:
 class GCN
 {
   GCNSmartObjects smart_objects;
+  natural L;
   const GCNData *data;
   DevGCNData dev_data;
   std::vector<unique_ptr<Module>> modules;
   std::vector<shared_ptr<Variable>> variables;
   shared_ptr<Variable> input, output;
   std::vector<shared_ptr<Variable>> weights;
+  std::vector<bool> decays;
   Adam optimizer;
   dev_shared_ptr<randState> dev_rand_states;
   dev_shared_ptr<integer> dev_truth;
@@ -112,6 +114,7 @@ class GCN
 
   void insert_first_layer();
   void insert_last_layer();
+  void insert_layer(const natural input_dim, const natural output_dim, const real dropout, const natural layer_index);
 
 public:
   const GCNParams *params;

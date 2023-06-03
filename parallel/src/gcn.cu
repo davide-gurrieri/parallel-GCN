@@ -2,11 +2,12 @@
 
 // ##################################################################################
 
-GCNSmartObjects::GCNSmartObjects() : forward_training_stream(High), forward_evaluation_stream(High)
+GCNSmartObjects::GCNSmartObjects(const natural n_layers) : forward_training_stream(High), forward_evaluation_stream(High)
 {
     backward_streams.emplace_back(High);
     backward_streams.emplace_back(High);
-    start_matmul_forward.resize(2);
+    start_matmul_forward.resize(n_layers);
+    start_matmul_backward.resize(n_layers - 1);
 }
 
 // ##################################################################################
@@ -23,6 +24,8 @@ void GCNParams::print_info() const
     std::cout << "Test dataset dimension: " << test_dim << std::endl;
     std::cout << std::endl;
 }
+
+// ##################################################################################
 
 DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex(gcn_data.graph)), dev_feature_index(DevSparseIndex(gcn_data.feature_index))
 {
@@ -71,17 +74,50 @@ void GCN::insert_first_layer()
     dev_l2 = dev_shared_ptr<real>(1); // used by get_l2_penalty()
     pinned_l2 = pinned_host_ptr<real>(1);
 
-    modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dims.front(), smart_objects.start_matmul_forward[0], smart_objects.start_set_input));
+    modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dims.front(), smart_objects.start_matmul_forward.front(), smart_objects.start_set_input));
 
     // graph sum
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dims.front()));
     shared_ptr<Variable> layer1_var2 = variables.back();
 
-    modules.push_back(std::make_unique<GraphSum>(layer1_var1, layer1_var2, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->hidden_dims.front(), false, smart_objects.start_matmul_backward));
+    smart_event trash;
+    modules.push_back(std::make_unique<GraphSum>(layer1_var1, layer1_var2, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->hidden_dims.front(), false, trash));
 
     // ReLU
     modules.push_back(std::make_unique<ReLU>(layer1_var2));
 }
+
+// ##################################################################################
+
+void GCN::insert_layer(const natural input_dim, const natural output_dim, const real dropout, const natural layer_index)
+{
+    // layer_index starts from 1
+    // dropout
+    shared_ptr<Variable> layer_prev_var2 = variables.back();
+    modules.push_back(std::make_unique<Dropout>(layer_prev_var2, dropout, dev_rand_states));
+
+    // dense matmul
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * output_dim));
+    shared_ptr<Variable> layer_var1 = variables.back();
+
+    variables.push_back(std::make_shared<Variable>(params->input_dim * params->output_dim, true, true));
+    shared_ptr<Variable> layer_weight = variables.back();
+    layer_weight->glorot(input_dim, output_dim);
+    // layer_weight->set_value(0.5, forward_training_stream);
+    weights.push_back(layer_weight);
+
+    modules.push_back(std::make_unique<Matmul>(layer_prev_var2, layer_weight, layer_var1, params->num_nodes, input_dim, output_dim, smart_objects.start_matmul_forward[layer_index], smart_objects.start_matmul_backward[L - layer_index - 1], smart_objects.backward_streams[1]));
+
+    // graph sum
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * output_dim));
+    shared_ptr<Variable> layer_var2 = variables.back();
+    modules.push_back(std::make_unique<GraphSum>(layer_var1, layer_var2, &dev_data.dev_graph_index, dev_data.dev_graph_value, output_dim, true, smart_objects.start_matmul_backward[L - layer_index - 1]));
+
+    // ReLU
+    modules.push_back(std::make_unique<ReLU>(layer_var2));
+}
+
+// ##################################################################################
 
 void GCN::insert_last_layer()
 {
@@ -99,35 +135,43 @@ void GCN::insert_last_layer()
     // layer_last_weight->set_value(0.5, smart_objects.forward_training_stream);
     weights.push_back(layer_last_weight);
 
-    modules.push_back(std::make_unique<Matmul>(layer_prev_var2, layer_last_weight, layer_last_var1, params->num_nodes, params->hidden_dims.back(), params->output_dim, smart_objects.start_matmul_forward[1], smart_objects.start_matmul_backward, smart_objects.backward_streams[1]));
+    modules.push_back(std::make_unique<Matmul>(layer_prev_var2, layer_last_weight, layer_last_var1, params->num_nodes, params->hidden_dims.back(), params->output_dim, smart_objects.start_matmul_forward.back(), smart_objects.start_matmul_backward.front(), smart_objects.backward_streams[1]));
 
     // graph sum
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
     output = variables.back();
-    modules.push_back(std::make_unique<GraphSum>(layer_last_var1, output, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->output_dim, true, smart_objects.start_matmul_backward));
+    modules.push_back(std::make_unique<GraphSum>(layer_last_var1, output, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->output_dim, true, smart_objects.start_matmul_backward.front()));
 
     // cross entropy loss
     modules.push_back(std::make_unique<CrossEntropyLoss>(output, dev_truth, loss, params->output_dim, smart_objects.start_backward));
 }
 
-GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_) : params(params_), adam_params(adam_params_), data(data_), dev_data{DevGCNData(*data_)}
+// ##################################################################################
+
+GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_) : params(params_), adam_params(adam_params_), data(data_), dev_data{DevGCNData(*data_)}, smart_objects(params_->n_layers)
 {
+    L = params->n_layers;
     initialize_random();
     dev_truth = dev_shared_ptr<integer>(params->num_nodes);
     dev_wrong = dev_shared_ptr<natural>(1); // used by get_accuracy()
     pinned_wrong = pinned_host_ptr<natural>(1);
     loss = pinned_host_ptr<real>(1);
 
-    modules.reserve(8);
-    variables.reserve(7);
-    weights.reserve(params->n_layers);
+    modules.reserve(4 * L);
+    variables.reserve(4 + 3 * (L - 1));
+    weights.reserve(L);
+    decays.resize(L, false); // true for L2 regularization
+    decays.front() = true;
 
     insert_first_layer();
+
+    // add layer 1 to n_layers - 2
+    for (natural i = 1; i < L - 1; ++i)
+        insert_layer(params->hidden_dims[i - 1], params->hidden_dims[i], params->dropouts[i], i);
+
     insert_last_layer();
 
     // optimizer
-    std::vector<bool> decays(params->n_layers, false);
-    decays.front() = true;
     optimizer = Adam(weights, decays, adam_params, smart_objects.backward_streams, smart_objects.start_matmul_forward, smart_objects.forward_training_stream);
 }
 
@@ -220,13 +264,17 @@ __global__ void get_l2_penalty_kernel(real *dev_l2, const real *weight, const na
 void GCN::get_l2_penalty(smart_stream stream) const
 {
     dev_l2.set_zero(stream);
-    const auto &weights = variables[2];
-    const natural n_blocks = std::min(CEIL(weights->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
-    get_l2_penalty_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(dev_l2.get(), weights->dev_data.get(), weights->size);
+    natural i = 0;
+    for (const auto &weight : weights)
+        if (decays[i++])
+        {
+            const natural n_blocks = std::min(CEIL(weight->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+            get_l2_penalty_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(dev_l2.get(), weight->dev_data.get(), weight->size);
 #ifdef DEBUG_CUDA
-    CHECK_CUDA_ERROR(cudaGetLastError());
+            CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // cudaStreamSynchronize(smart_objects.forward_training_stream.get());
+        }
+
     dev_l2.copy_to_host_async(pinned_l2.get(), stream);
 }
 
