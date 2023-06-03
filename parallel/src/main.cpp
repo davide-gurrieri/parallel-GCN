@@ -41,8 +41,12 @@ int main(int argc, char **argv) {
 
   GetPot datafile(file_name.c_str());
 
-  // Parse parameters
+// Parse parameters
+#ifdef TUNE
+  parse_parameters(datafile, params, adam_params, false);
+#else
   parse_parameters(datafile, params, adam_params, true);
+#endif
 
   // Parse data
   GCNData data;
