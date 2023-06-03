@@ -7,7 +7,7 @@ __global__ void initialize_var_random_kernel(randState *dev_rand_states, const n
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
     for (natural i = id; i < size; i += blockDim.x * gridDim.x)
-        curand_init(seed, i, 0, &dev_rand_states[i]); // curand_init(seed, sequence, offset, &state);
+        curand_init(seed * i, i, 0, &dev_rand_states[i]); // curand_init(seed, sequence, offset, &state);
 }
 
 Variable::Variable(const natural size_, const bool requires_grad, const bool weights) : size(size_)
