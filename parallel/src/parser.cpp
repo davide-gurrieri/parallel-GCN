@@ -60,10 +60,8 @@ void Parser::parseNode() {
   auto &feature_sparse_index =
       this->gcnData
           ->feature_index; // Reference to "feature_index" member (SparseIndex)
-#ifdef FEATURE
   auto &feature_val = this->gcnData->feature_value; // std::vector<float>
-#endif
-  auto &labels = this->gcnData->label; // std::vector<int>
+  auto &labels = this->gcnData->label;              // std::vector<int>
 
   feature_sparse_index.indptr.push_back(0);
 
@@ -99,7 +97,9 @@ void Parser::parseNode() {
       float v;
       char col;
       kv_ss >> k >> col >> v;
-#ifdef FEATURE
+#ifdef NO_FEATURE
+      feature_val.push_back(1.0);
+#else
       feature_val.push_back(v);
 #endif
       feature_sparse_index.indices.push_back(k);

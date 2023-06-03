@@ -56,9 +56,7 @@ struct GCNData
   std::vector<natural> split;
   std::vector<integer> label;
   std::vector<real> graph_value;
-#ifdef FEATURE
   std::vector<real> feature_value;
-#endif
 };
 
 // ##################################################################################
@@ -68,9 +66,7 @@ class DevGCNData
 public:
   DevSparseIndex dev_graph_index;   // adjacency matrix
   DevSparseIndex dev_feature_index; // feature
-#ifdef FEATURE
   dev_shared_ptr<real> dev_feature_value;
-#endif
   dev_shared_ptr<real> dev_graph_value;
   dev_shared_ptr<natural> dev_split;
   dev_shared_ptr<integer> dev_label;
@@ -101,9 +97,7 @@ class GCN
   pinned_host_ptr<natural> pinned_wrong;
 
   void initialize_random();
-#ifdef FEATURE
   void set_input(smart_stream stream, bool first) const;
-#endif
   void set_truth(const natural current_split, smart_stream stream) const;
 
   void get_accuracy(smart_stream stream) const;

@@ -31,16 +31,12 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex
 {
     label_size = gcn_data.label.size();
 
-#ifdef FEATURE
     dev_feature_value = dev_shared_ptr<real>(dev_feature_index.indices_size);
-#endif
     dev_graph_value = dev_shared_ptr<real>(dev_graph_index.indices_size);
     dev_split = dev_shared_ptr<natural>(label_size);
     dev_label = dev_shared_ptr<integer>(label_size);
 
-#ifdef FEATURE
     dev_feature_value.copy_to_device(gcn_data.feature_value.data());
-#endif
     dev_graph_value.copy_to_device(gcn_data.graph_value.data());
     dev_split.copy_to_device(gcn_data.split.data());
     dev_label.copy_to_device(gcn_data.label.data());
@@ -50,17 +46,11 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex
 
 void GCN::insert_first_layer()
 {
-#ifdef FEATURE
     // dropout
     variables.push_back(std::make_shared<Variable>(data->feature_index.indices.size(), false));
     input = variables.back();
     set_input(smart_objects.forward_training_stream, true);
     modules.push_back(std::make_unique<Dropout>(input, params->dropouts.front(), dev_rand_states));
-#else
-    // for compatibility
-    variables.push_back(std::make_shared<Variable>());
-    input = variables.back();
-#endif
 
     // sparse matmul
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dims.front()));
@@ -195,7 +185,6 @@ void GCN::initialize_random()
 
 // ##################################################################################
 
-#ifdef FEATURE
 __global__ void set_input_kernel(real *dev_data, const real *dev_feature_value, const natural size)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -216,7 +205,6 @@ void GCN::set_input(smart_stream stream, bool first) const
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
 }
-#endif
 
 // ##################################################################################
 
@@ -311,9 +299,7 @@ void GCN::get_accuracy(smart_stream stream) const
 
 std::pair<real, real> GCN::eval(const natural current_split) const
 {
-#ifdef FEATURE
     set_input(smart_objects.forward_evaluation_stream, false);
-#endif
     set_truth(current_split, smart_objects.forward_evaluation_stream);
     for (const auto &m : modules)
         m->forward(false, smart_objects.forward_evaluation_stream);

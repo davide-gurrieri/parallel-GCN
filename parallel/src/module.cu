@@ -118,11 +118,7 @@ __global__ void sparse_matmul_kernel_forward(const real *a, const real *b, real 
         real sum = 0;
 #pragma unroll
         for (natural jj = indptr[row]; jj < indptr[row + 1]; jj++)
-#ifdef FEATURE
             sum += a[jj] * b[indices[jj] * p + col];
-#else
-            sum += b[indices[jj] * p + col];
-#endif
         c[i] = sum;
     }
 }
@@ -155,11 +151,7 @@ __global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real
         for (natural jj = indptr[row]; jj < indptr[row + 1]; jj++)
         {
             natural j = indices[jj];
-#ifdef FEATURE
             atomicAdd(&b[j * p + col], a[jj] * c[row * p + col]);
-#else
-            atomicAdd(&b[j * p + col], c[row * p + col]);
-#endif
         }
     }
 }
@@ -171,9 +163,7 @@ void SparseMatmul::backward(const smart_stream &backward_stream) const
     b->zero_grad(backward_stream);
     const natural n_blocks = std::min(CEIL(m * p, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     sparse_matmul_kernel_backward<<<n_blocks, CudaParams::N_THREADS, 0, backward_stream.get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
-#ifdef FEATURE
     cudaEventRecord(start_set_input.get(), backward_stream.get());
-#endif
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
