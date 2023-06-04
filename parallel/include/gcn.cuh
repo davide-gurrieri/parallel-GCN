@@ -96,7 +96,6 @@ class GCN
   pinned_host_ptr<real> loss;
   pinned_host_ptr<natural> pinned_wrong;
 
-  void initialize_random();
   void set_input(smart_stream stream, bool first) const;
   void set_truth(const natural current_split, smart_stream stream) const;
 

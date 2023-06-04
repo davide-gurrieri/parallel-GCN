@@ -11,19 +11,21 @@
 class Variable
 {
 public:
+    inline static std::vector<natural> sizes;
+    inline static dev_shared_ptr<randState> dev_rand_states;
     dev_shared_ptr<real> dev_data;
     dev_shared_ptr<real> dev_grad;
-    natural size;
-    dev_shared_ptr<randState> dev_rand_states;
+    natural size, rows, cols;
 
-    Variable(const natural size_, const bool requires_grad = true, const bool weights = false);
+    Variable(const natural size_, const bool requires_grad = true, const bool weights = false, const natural rows_ = 0, const natural cols_ = 0);
     Variable() = default;
     void print(const std::string &what, natural col) const;
     void save(const std::string &file_name, const std::string &what, natural col) const;
     void zero(smart_stream stream) const;
     void zero_grad(smart_stream stream) const;
-    void glorot(const natural in_size, const natural out_size) const;
+    void glorot() const;
     void set_value(const real value, smart_stream stream) const;
+    static void initialize_random();
 };
 
 #endif

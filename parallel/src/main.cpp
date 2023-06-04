@@ -67,5 +67,7 @@ int main(int argc, char **argv) {
   // run the algorithm
   gcn.run();
 
+  Variable::dev_rand_states.~dev_shared_ptr();
+
   return EXIT_SUCCESS;
 }

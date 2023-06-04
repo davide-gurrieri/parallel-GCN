@@ -35,10 +35,9 @@ class Dropout : public Module
     shared_ptr<Variable> in;
     dev_shared_ptr<bool> dev_mask;
     real p;
-    dev_shared_ptr<randState> dev_rand_states;
 
 public:
-    Dropout(shared_ptr<Variable> in_, real p_, dev_shared_ptr<randState> dev_rand_states_);
+    Dropout(shared_ptr<Variable> in_, real p_);
     void forward(bool, const smart_stream &) const;
     void backward(const smart_stream &) const;
 };

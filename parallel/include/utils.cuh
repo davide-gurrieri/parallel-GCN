@@ -10,9 +10,9 @@
 using natural = unsigned;
 using integer = int;
 using real = float;
-using randState = curandStateXORWOW;
+// using randState = curandStateXORWOW;
 // using randState = curandState;
-// using randState = curandStatePhilox4_32_10_t;
+using randState = curandStatePhilox4_32_10_t;
 
 namespace CudaParams
 {

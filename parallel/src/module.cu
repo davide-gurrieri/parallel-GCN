@@ -3,7 +3,7 @@
 // DROPOUT
 // ##################################################################################
 
-Dropout::Dropout(shared_ptr<Variable> in_, real p_, dev_shared_ptr<randState> dev_rand_states_) : in(in_), p(p_), dev_rand_states(dev_rand_states_)
+Dropout::Dropout(shared_ptr<Variable> in_, real p_) : in(in_), p(p_)
 {
     if (in->dev_grad.get())
         dev_mask = dev_shared_ptr<bool>(in->size);
@@ -13,21 +13,90 @@ Dropout::Dropout(shared_ptr<Variable> in_, real p_, dev_shared_ptr<randState> de
 
 // ##################################################################################
 
-__global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, const randState *dev_rand_states,
+// versione migliore ma costosa
+
+__global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, randState *dev_rand_states,
+                                       const natural size, const natural kernel_size, const real p, const real scale)
+{
+    natural id = blockIdx.x * blockDim.x + threadIdx.x;
+    bool keep;
+    natural j;
+#pragma unroll
+    for (natural i = id; i < kernel_size; i += blockDim.x * gridDim.x)
+    {
+        const float4 rand = curand_uniform4(&dev_rand_states[i]);
+        j = i * 4;
+
+        if (dev_mask)
+        {
+            keep = rand.x >= p;
+            dev_data[j] *= keep ? scale : 0.f;
+            dev_mask[j] = keep;
+            if (++j < size)
+            {
+                keep = rand.y >= p;
+                dev_data[j] *= keep ? scale : 0.f;
+                dev_mask[j] = keep;
+            }
+            if (++j < size)
+            {
+                keep = rand.z >= p;
+                dev_data[j] *= keep ? scale : 0.f;
+                dev_mask[j] = keep;
+            }
+            if (++j < size)
+            {
+                keep = rand.w >= p;
+                dev_data[j] *= keep ? scale : 0.f;
+                dev_mask[j] = keep;
+            }
+        }
+        else
+        {
+            dev_data[j] *= rand.x >= p ? scale : 0.f;
+            if (++j < size)
+                dev_data[j] *= rand.y >= p ? scale : 0.f;
+            if (++j < size)
+                dev_data[j] *= rand.z >= p ? scale : 0.f;
+            if (++j < size)
+                dev_data[j] *= rand.w >= p ? scale : 0.f;
+        }
+    }
+}
+
+void Dropout::forward(bool training, const smart_stream &stream) const
+{
+    if (!training)
+        return;
+
+    const real scale = 1.0 / (1.0 - p);
+    const natural kernel_size = CEIL(in->size, 4);
+    const natural n_blocks = std::min(CEIL(kernel_size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    dropout_kernel_forward<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), Variable::dev_rand_states.get(), in->size, kernel_size, p, scale);
+#ifdef DEBUG_CUDA
+    CHECK_CUDA_ERROR(cudaGetLastError());
+#endif
+}
+
+/*
+__global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, randState *dev_rand_states,
                                        const natural size, const real p, const real scale)
 {
     extern __shared__ randState s_rand_states[];
     s_rand_states[threadIdx.x] = dev_rand_states[threadIdx.x];
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
+    bool keep;
 #pragma unroll
     for (natural i = id; i < size; i += blockDim.x * gridDim.x)
     {
-        bool keep = curand_uniform(&s_rand_states[threadIdx.x]) >= p;
+        keep = curand_uniform(&s_rand_states[threadIdx.x]) >= p;
         dev_data[i] *= keep ? scale : 0.f;
         if (dev_mask)
             dev_mask[i] = keep;
     }
+    dev_rand_states[threadIdx.x] = s_rand_states[threadIdx.x];
 }
+*/
 
 // needs curandStatePhilox4_32_10_t
 /*
@@ -57,6 +126,7 @@ __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, const ran
 }
 */
 
+/*
 void Dropout::forward(bool training, const smart_stream &stream) const
 {
     if (!training)
@@ -69,9 +139,19 @@ void Dropout::forward(bool training, const smart_stream &stream) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    // timer_stop(TMR_DROPOUT_FW);
-}
 
+        bool mask_v[in->size];
+        if (dev_mask.get())
+        {
+            dev_mask.copy_to_host_async(mask_v, stream);
+            for (natural id = 0; id < 512; id++)
+                printf("id: %d, keep: %d\n", id, mask_v[id]);
+        }
+
+// timer_stop(TMR_DROPOUT_FW);
+// in->save("after_dropout.txt", "data", in->size);
+}
+*/
 // ##################################################################################
 
 __global__ void dropout_kernel_backward(real *dev_grad, const bool *mask, const natural size, const real scale)
