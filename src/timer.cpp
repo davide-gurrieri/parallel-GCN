@@ -13,3 +13,8 @@ float timer_stop(timer_instance t) {
 }
 
 float timer_total(timer_instance t) { return tmr_sum[t]; }
+
+void reset_timer() {
+  for (int i = 0; i < __NUM_TMR; i++)
+    tmr_sum[i] = 0.0f;
+}

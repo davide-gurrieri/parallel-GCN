@@ -170,6 +170,7 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
     Variable::initialize_random();
     for (const auto &weight : weights)
         weight->glorot();
+    // weight->set_value(0.5, smart_objects.forward_training_stream);
 
     // optimizer
     optimizer = Adam(weights, decays, adam_params, smart_objects.backward_streams, smart_objects.start_matmul_forward, smart_objects.forward_training_stream);
@@ -350,16 +351,16 @@ void GCN::run()
     // real total_time = 0.0;
     std::vector<real> loss_history;
     loss_history.reserve(params->epochs);
+    real train_loss{0.f}, train_acc{0.f};
+    real val_loss{0.f}, val_acc{0.f};
+
     // Iterate the training process based on the selected number of epoch
     for (; epoch <= params->epochs; epoch++)
     {
-        real train_loss{0.f}, train_acc{0.f};
-
         timer_start(TMR_TRAIN); // just for timing purposes
         // train the epoch and record the current train_loss and train_accuracy
         std::tie(train_loss, train_acc) = train_epoch();
 
-        real val_loss{0.f}, val_acc{0.f};
         // eval the model at the current step in order to obtain the val_loss and val_accuracy
         std::tie(val_loss, val_acc) = eval(2);
 #ifndef NO_OUTPUT
@@ -382,7 +383,9 @@ void GCN::run()
                     recent_loss += loss_history[i];
                 if (val_loss > recent_loss / static_cast<real>(params->early_stopping))
                 {
+#ifndef NO_OUTPUT
                     printf("Early stopping...\n");
+#endif
                     break;
                 }
             }
@@ -392,8 +395,14 @@ void GCN::run()
 #ifndef NO_OUTPUT
     PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
 #else
+#ifdef TUNE_CUDA
     PRINT_TIMER_AVERAGE_NO_OUTPUT(TMR_TRAIN, epoch);
-    output_for_tuning = TIMER_AVERAGE_NO_OUTPUT(TMR_TRAIN, epoch);
+    avg_epoch_time = TIMER_AVERAGE_NO_OUTPUT(TMR_TRAIN, epoch);
+#endif
+#ifdef TUNE_ACCURACY
+    std::cout << val_acc << std::endl;
+    last_val_accuracy = val_acc;
+#endif
 #endif
 
     /*

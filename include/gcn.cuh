@@ -113,7 +113,8 @@ class GCN
   void print_variable_info() const;
 
 public:
-  real output_for_tuning;
+  real avg_epoch_time;
+  real last_val_accuracy;
   const GCNParams *params;
   const AdamParams *adam_params;
   GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_);
