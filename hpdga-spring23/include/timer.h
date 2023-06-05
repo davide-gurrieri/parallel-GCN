@@ -22,11 +22,16 @@ typedef enum {
 void timer_start(timer_instance t);
 float timer_stop(timer_instance t);
 float timer_total(timer_instance t);
+void reset_timer();
 
 #define PRINT_TIMER_AVERAGE(T, E)                                              \
   printf(#T " average time: %.3fms\n", timer_total(T) * 1000 / E)
 #define PRINT_TIMER_AVERAGE_EVAL(T, E)                                         \
   printf("%.3f\n", timer_total(T) * 1000 / E)
+
+inline float TIMER_AVERAGE_NO_OUTPUT(timer_instance t, int e) {
+  return timer_total(t) * 1000 / e;
+}
 
 #define TIMER_H
 #endif

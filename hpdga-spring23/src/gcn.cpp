@@ -269,5 +269,6 @@ void GCN::run() {
          timer_stop(TMR_TEST));
 #else
   PRINT_TIMER_AVERAGE_EVAL(TMR_TRAIN, epoch);
+  time = TIMER_AVERAGE_NO_OUTPUT(TMR_TRAIN, epoch);
 #endif
 }
