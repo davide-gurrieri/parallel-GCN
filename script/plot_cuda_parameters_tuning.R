@@ -34,7 +34,7 @@ save_svg_plot = function(plot,
   }
 }
 
-folder = paste(here(), "/parallel/script", sep = "")
+folder = paste(here(), "/script", sep = "")
 setwd(folder)
 names = c("citeseer", "cora", "pubmed")
 plots = vector("list", length = 3)
@@ -78,3 +78,4 @@ for (name in names)
                 folder = "../output/plot/",
                 type = "ggplot")
 }
+
