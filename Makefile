@@ -14,36 +14,13 @@ gcn-par-no-feature: src/main.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
 	$(CXX) $(CXXFLAGS) -DNO_FEATURE -o exec/gcn-par-no-feature $(CXXFILES) src/main.cpp
 
-gcn-par-tune-cuda: src/main.cpp $(CXXFILES) $(HFILES)
-	mkdir -p exec
-	$(CXX) $(CXXFLAGS) -DNO_OUTPUT -o exec/gcn-par-tune-cuda $(CXXFILES) src/main.cpp
-
-gcn-par-tune-accuracy: src/main.cpp $(CXXFILES) $(HFILES)
-	mkdir -p exec
-	$(CXX) $(CXXFLAGS) -DNO_OUTPUT -o exec/gcn-par-tune-accuracy $(CXXFILES) src/main.cpp
-
 tuning-cuda: test/tuning_cuda.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
 	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -o exec/tuning-cuda $(CXXFILES) test/tuning_cuda.cpp
 
-run-tuning-cuda:
-	mkdir -p output
-	mkdir -p output/plot
-	exec/tuning-cuda
-	python3 script/ordering.py output/tuning_cuda_citeseer.txt
-	python3 script/ordering.py output/tuning_cuda_cora.txt
-	python3 script/ordering.py output/tuning_cuda_pubmed.txt
-
-compare-performance: test/performance_gpu.cpp $(CXXFILES) $(HFILES)
+performance-gpu: test/performance_gpu.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
 	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -o exec/performance-gpu $(CXXFILES) test/performance_gpu.cpp
-
-run-compare-performance:
-	mkdir -p output
-	mkdir -p output/plot
-	exec/performance-gpu
-
-
-
+	
 clean:
 	rm exec/*

@@ -1,6 +1,5 @@
 CXX=gcc
 CXXFLAGS=-O3 -std=c++11 -Wall -Wno-sign-compare -Wno-unused-variable -Wno-unknown-pragmas 
-OPTIONAL_CXXFLAGS=#-DEVAL
 LDFLAGS=-lm -lstdc++
 
 CXXFILES=src/gcn.cpp src/optim.cpp src/module.cpp src/variable.cpp src/parser.cpp src/rand.cpp src/timer.cpp
@@ -10,7 +9,11 @@ all: gcn-seq
 
 gcn-seq: src/main.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
-	$(CXX) $(CXXFLAGS) $(OPTIONAL_CXXFLAGS) -o exec/gcn-seq $(CXXFILES) src/main.cpp $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -o exec/gcn-seq $(CXXFILES) src/main.cpp $(LDFLAGS)
+
+performance-cpu: ../test/performance_cpu.cpp $(CXXFILES) $(HFILES)
+	mkdir -p ../exec
+	$(CXX) $(CXXFLAGS) -DEVAL -o ../exec/performance-cpu $(CXXFILES) ../test/performance_cpu.cpp $(LDFLAGS)
 
 clean:
 	rm exec/*
