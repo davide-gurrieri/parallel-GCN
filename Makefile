@@ -16,11 +16,15 @@ gcn-par-no-feature: src/main.cpp $(CXXFILES) $(HFILES)
 
 tuning-cuda: test/tuning_cuda.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
-	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -o exec/tuning-cuda $(CXXFILES) test/tuning_cuda.cpp
+	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_CUDA -o exec/tuning-cuda $(CXXFILES) test/tuning_cuda.cpp
 
 performance-gpu: test/performance_gpu.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
-	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -o exec/performance-gpu $(CXXFILES) test/performance_gpu.cpp
+	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_CUDA -o exec/performance-gpu $(CXXFILES) test/performance_gpu.cpp
+
+tuning-accuracy: test/tuning_accuracy.cpp $(CXXFILES) $(HFILES)
+	mkdir -p exec
+	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -o exec/tuning-accuracy $(CXXFILES) test/tuning_accuracy.cpp
 	
 clean:
 	rm exec/*
