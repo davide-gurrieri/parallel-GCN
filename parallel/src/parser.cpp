@@ -189,19 +189,19 @@ void vprint(std::vector<int> v) {
 bool Parser::parse() {
   if (!isValidInput())
     return false;
-#ifndef TUNE_CUDA
+#ifndef NO_OUTPUT
   std::cout << "PARSING DATA ..." << std::endl;
 #endif
   this->parseGraph();
-#ifndef TUNE_CUDA
+#ifndef NO_OUTPUT
   std::cout << "Parse Graph Succeeded." << std::endl;
 #endif
   this->parseNode();
-#ifndef TUNE_CUDA
+#ifndef NO_OUTPUT
   std::cout << "Parse Node Succeeded." << std::endl;
 #endif
   this->parseSplit();
-#ifndef TUNE_CUDA
+#ifndef NO_OUTPUT
   std::cout << "Parse Split Succeeded." << std::endl;
 #endif
   this->calculateGraphValues();
@@ -241,6 +241,7 @@ void parse_parameters(GetPot &datafile, GCNParams &params,
   CudaParams::N_BLOCKS =
       datafile("num_blocks_factor", 0) * devProp.multiProcessorCount;
   CudaParams::N_THREADS = datafile("num_threads", 0);
+  CudaParams::SEED = datafile("seed", 0);
 
   if (print) {
     std::cout << "PARSED PARAMETERS FROM GETPOT" << std::endl;

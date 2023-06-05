@@ -47,19 +47,21 @@ DevGCNData::DevGCNData(const GCNData &gcn_data) : dev_graph_index(DevSparseIndex
 void GCN::insert_first_layer()
 {
     // dropout
-    variables.push_back(std::make_shared<Variable>(data->feature_index.indices.size(), false, true)); //!
+    variables.push_back(std::make_shared<Variable>(data->feature_index.indices.size(), false, true));
     input = variables.back();
+    variables_info += "input:         " + std::to_string(input->size) + "\n";
     set_input(smart_objects.forward_training_stream, true);
     modules.push_back(std::make_unique<Dropout>(input, params->dropouts.front()));
 
     // sparse matmul
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dims.front()));
     shared_ptr<Variable> layer1_var1 = variables.back();
+    variables_info += "layer1_var1:   " + std::to_string(layer1_var1->size) + "\n";
 
     variables.push_back(std::make_shared<Variable>(params->input_dim * params->hidden_dims.front(), true, true, params->input_dim, params->hidden_dims.front()));
     shared_ptr<Variable> layer1_weight = variables.back();
-    // layer1_weight->glorot(params->input_dim, params->hidden_dims.front());
-    // layer1_weight->set_value(0.5, smart_objects.forward_training_stream);
+    variables_info += "layer1_weight: " + std::to_string(layer1_weight->size) + "\n";
+
     weights.push_back(layer1_weight);
     dev_l2 = dev_shared_ptr<real>(1); // used by get_l2_penalty()
     pinned_l2 = pinned_host_ptr<real>(1);
@@ -67,8 +69,9 @@ void GCN::insert_first_layer()
     modules.push_back(std::make_unique<SparseMatmul>(input, layer1_weight, layer1_var1, &dev_data.dev_feature_index, params->num_nodes, params->input_dim, params->hidden_dims.front(), smart_objects.start_matmul_forward.front(), smart_objects.start_set_input));
 
     // graph sum
-    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dims.front(), true, true)); //!
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * params->hidden_dims.front(), true, true));
     shared_ptr<Variable> layer1_var2 = variables.back();
+    variables_info += "layer1_var2:   " + std::to_string(layer1_var2->size) + "\n";
 
     smart_event trash;
     modules.push_back(std::make_unique<GraphSum>(layer1_var1, layer1_var2, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->hidden_dims.front(), false, trash));
@@ -89,18 +92,19 @@ void GCN::insert_layer(const natural input_dim, const natural output_dim, const 
     // dense matmul
     variables.push_back(std::make_shared<Variable>(params->num_nodes * output_dim));
     shared_ptr<Variable> layer_var1 = variables.back();
+    variables_info += "layer" + std::to_string(layer_index + 1) + "_var1:   " + std::to_string(layer_var1->size) + "\n";
 
     variables.push_back(std::make_shared<Variable>(params->input_dim * params->output_dim, true, true, input_dim, output_dim));
     shared_ptr<Variable> layer_weight = variables.back();
-    // layer_weight->glorot(input_dim, output_dim);
-    // layer_weight->set_value(0.5, forward_training_stream);
+    variables_info += "layer" + std::to_string(layer_index + 1) + "_weight: " + std::to_string(layer_weight->size) + "\n";
     weights.push_back(layer_weight);
 
     modules.push_back(std::make_unique<Matmul>(layer_prev_var2, layer_weight, layer_var1, params->num_nodes, input_dim, output_dim, smart_objects.start_matmul_forward[layer_index], smart_objects.start_matmul_backward[L - layer_index - 1], smart_objects.backward_streams[1]));
 
     // graph sum
-    variables.push_back(std::make_shared<Variable>(params->num_nodes * output_dim, true, true)); //!
+    variables.push_back(std::make_shared<Variable>(params->num_nodes * output_dim, true, true));
     shared_ptr<Variable> layer_var2 = variables.back();
+    variables_info += "layer" + std::to_string(layer_index + 1) + "_var2:   " + std::to_string(layer_var2->size) + "\n";
     modules.push_back(std::make_unique<GraphSum>(layer_var1, layer_var2, &dev_data.dev_graph_index, dev_data.dev_graph_value, output_dim, true, smart_objects.start_matmul_backward[L - layer_index - 1]));
 
     // ReLU
@@ -118,11 +122,11 @@ void GCN::insert_last_layer()
     // dense matmul
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
     shared_ptr<Variable> layer_last_var1 = variables.back();
+    variables_info += "layer" + std::to_string(L) + "_var1:   " + std::to_string(layer_last_var1->size) + "\n";
 
     variables.push_back(std::make_shared<Variable>(params->hidden_dims.back() * params->output_dim, true, true, params->hidden_dims.back(), params->output_dim));
     shared_ptr<Variable> layer_last_weight = variables.back();
-    // layer_last_weight->glorot(params->hidden_dims.back(), params->output_dim);
-    // layer_last_weight->set_value(0.5, smart_objects.forward_training_stream);
+    variables_info += "layer" + std::to_string(L) + "_weight: " + std::to_string(layer_last_weight->size) + "\n";
     weights.push_back(layer_last_weight);
 
     modules.push_back(std::make_unique<Matmul>(layer_prev_var2, layer_last_weight, layer_last_var1, params->num_nodes, params->hidden_dims.back(), params->output_dim, smart_objects.start_matmul_forward.back(), smart_objects.start_matmul_backward.front(), smart_objects.backward_streams[1]));
@@ -130,6 +134,7 @@ void GCN::insert_last_layer()
     // graph sum
     variables.push_back(std::make_shared<Variable>(params->num_nodes * params->output_dim));
     output = variables.back();
+    variables_info += "layer" + std::to_string(L) + "_var2:   " + std::to_string(output->size);
     modules.push_back(std::make_unique<GraphSum>(layer_last_var1, output, &dev_data.dev_graph_index, dev_data.dev_graph_value, params->output_dim, true, smart_objects.start_matmul_backward.front()));
 
     // cross entropy loss
@@ -159,7 +164,9 @@ GCN::GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const
         insert_layer(params->hidden_dims[i - 1], params->hidden_dims[i], params->dropouts[i], i);
 
     insert_last_layer();
-
+#ifndef NO_OUTPUT
+    print_variable_info();
+#endif
     Variable::initialize_random();
     for (const auto &weight : weights)
         weight->glorot();
@@ -355,7 +362,7 @@ void GCN::run()
         real val_loss{0.f}, val_acc{0.f};
         // eval the model at the current step in order to obtain the val_loss and val_accuracy
         std::tie(val_loss, val_acc) = eval(2);
-#ifndef TUNE_CUDA
+#ifndef NO_OUTPUT
         const auto time = timer_stop(TMR_TRAIN);
         printf("epoch=%d train_loss=%.5f train_acc=%.5f val_loss=%.5f val_acc=%.5f time=%.5f\n",
                epoch, train_loss, train_acc, val_loss, val_acc, time);
@@ -382,10 +389,11 @@ void GCN::run()
         }
     }
     timer_stop(TMR_TOTAL);
-#ifndef TUNE_CUDA
+#ifndef NO_OUTPUT
     PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
 #else
-    PRINT_TIMER_AVERAGE_TUNE_CUDA(TMR_TRAIN, epoch);
+    PRINT_TIMER_AVERAGE_NO_OUTPUT(TMR_TRAIN, epoch);
+    output_for_tuning = TIMER_AVERAGE_NO_OUTPUT(TMR_TRAIN, epoch);
 #endif
 
     /*
@@ -402,7 +410,7 @@ void GCN::run()
     PRINT_TIMER_AVERAGE(TMR_LOSS_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_OPTIMIZER, epoch);
     */
-#ifndef TUNE_CUDA
+#ifndef NO_OUTPUT
     real test_loss, test_acc;
     timer_start(TMR_TEST);
     std::tie(test_loss, test_acc) = eval(3); // eval the model on the test set
@@ -410,6 +418,7 @@ void GCN::run()
     printf("test_loss=%.5f test_acc=%.5f time=%.5f\n", test_loss, test_acc, timer_stop(TMR_TEST));
     printf("total time: %.5f\n", timer_total(TMR_TOTAL));
 #endif
+    cudaDeviceSynchronize();
 }
 
 // ##################################################################################
@@ -429,4 +438,13 @@ std::pair<real, real> GCN::finalize(smart_stream stream) const
     // accuracy
     const real final_accuracy = static_cast<real>(total - *pinned_wrong) / static_cast<real>(total);
     return {final_loss, final_accuracy};
+}
+
+// ##################################################################################
+
+void GCN::print_variable_info() const
+{
+    std::cout << "VARIABLES WITH SIZE:" << std::endl;
+    std::cout << variables_info << std::endl;
+    std::cout << std::endl;
 }

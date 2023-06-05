@@ -13,8 +13,6 @@ Dropout::Dropout(shared_ptr<Variable> in_, real p_) : in(in_), p(p_)
 
 // ##################################################################################
 
-// versione migliore ma costosa
-
 __global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, randState *dev_rand_states,
                                        const natural size, const natural kernel_size, const real p, const real scale)
 {
@@ -68,7 +66,6 @@ void Dropout::forward(bool training, const smart_stream &stream) const
 {
     if (!training)
         return;
-
     const real scale = 1.0 / (1.0 - p);
     const natural kernel_size = CEIL(in->size, 4);
     const natural n_blocks = std::min(CEIL(kernel_size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
@@ -78,80 +75,6 @@ void Dropout::forward(bool training, const smart_stream &stream) const
 #endif
 }
 
-/*
-__global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, randState *dev_rand_states,
-                                       const natural size, const real p, const real scale)
-{
-    extern __shared__ randState s_rand_states[];
-    s_rand_states[threadIdx.x] = dev_rand_states[threadIdx.x];
-    natural id = blockIdx.x * blockDim.x + threadIdx.x;
-    bool keep;
-#pragma unroll
-    for (natural i = id; i < size; i += blockDim.x * gridDim.x)
-    {
-        keep = curand_uniform(&s_rand_states[threadIdx.x]) >= p;
-        dev_data[i] *= keep ? scale : 0.f;
-        if (dev_mask)
-            dev_mask[i] = keep;
-    }
-    dev_rand_states[threadIdx.x] = s_rand_states[threadIdx.x];
-}
-*/
-
-// needs curandStatePhilox4_32_10_t
-/*
-__global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, const randState *dev_rand_states,
-                                       const natural size, const real p, const real scale)
-{
-    extern __shared__ randState s_rand_states[];
-    s_rand_states[threadIdx.x] = dev_rand_states[threadIdx.x];
-    natural id = 4 * (blockIdx.x * blockDim.x + threadIdx.x);
-
-#pragma unroll
-    for (natural i = id; i < size; i += 4 * blockDim.x * gridDim.x)
-    {
-        float4 rand = curand_uniform4(&s_rand_states[threadIdx.x]);
-        dev_data[i] *= rand.x >= p ? scale : 0;
-        dev_data[i + 1] *= rand.y >= p ? scale : 0;
-        dev_data[i + 2] *= rand.z >= p ? scale : 0;
-        dev_data[i + 3] *= rand.w >= p ? scale : 0;
-        if (dev_mask)
-        {
-            dev_mask[i] = rand.x >= p;
-            dev_mask[i + 1] = rand.y >= p;
-            dev_mask[i + 2] = rand.z >= p;
-            dev_mask[i + 3] = rand.w >= p;
-        }
-    }
-}
-*/
-
-/*
-void Dropout::forward(bool training, const smart_stream &stream) const
-{
-    if (!training)
-        return;
-
-    // timer_start(TMR_DROPOUT_FW);
-    const real scale = 1.0 / (1.0 - p);
-    const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS_DROPOUT), CudaParams::N_BLOCKS);
-    dropout_kernel_forward<<<n_blocks, CudaParams::N_THREADS_DROPOUT, CudaParams::N_THREADS_DROPOUT * sizeof(randState), stream.get()>>>(in->dev_data.get(), dev_mask.get(), dev_rand_states.get(), in->size, p, scale);
-#ifdef DEBUG_CUDA
-    CHECK_CUDA_ERROR(cudaGetLastError());
-#endif
-
-        bool mask_v[in->size];
-        if (dev_mask.get())
-        {
-            dev_mask.copy_to_host_async(mask_v, stream);
-            for (natural id = 0; id < 512; id++)
-                printf("id: %d, keep: %d\n", id, mask_v[id]);
-        }
-
-// timer_stop(TMR_DROPOUT_FW);
-// in->save("after_dropout.txt", "data", in->size);
-}
-*/
 // ##################################################################################
 
 __global__ void dropout_kernel_backward(real *dev_grad, const bool *mask, const natural size, const real scale)
@@ -167,17 +90,12 @@ void Dropout::backward(const smart_stream &backward_stream) const
 {
     if (!dev_mask.get())
         return;
-
-    // timer_start(TMR_DROPOUT_BW);
-
     const real scale = 1.0 / (1.0 - p);
     const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     dropout_kernel_backward<<<n_blocks, CudaParams::N_THREADS, 0, backward_stream.get()>>>(in->dev_grad.get(), dev_mask.get(), in->size, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-
-    // timer_stop(TMR_DROPOUT_BW);
 }
 
 // SPARSEMATMUL
@@ -205,16 +123,12 @@ __global__ void sparse_matmul_kernel_forward(const real *a, const real *b, real 
 
 void SparseMatmul::forward(bool training, const smart_stream &stream) const
 {
-    // timer_start(TMR_SPMATMUL_FW);
-
     const natural n_blocks = std::min(CEIL(m * p, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     cudaStreamWaitEvent(stream.get(), start_matmul_forward.get());
     sparse_matmul_kernel_forward<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(a->dev_data.get(), b->dev_data.get(), c->dev_data.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-
-    // timer_stop(TMR_SPMATMUL_FW);
 }
 
 // ##################################################################################
@@ -238,8 +152,6 @@ __global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real
 
 void SparseMatmul::backward(const smart_stream &backward_stream) const
 {
-    // timer_start(TMR_SPMATMUL_BW);
-
     b->zero_grad(backward_stream);
     const natural n_blocks = std::min(CEIL(m * p, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     sparse_matmul_kernel_backward<<<n_blocks, CudaParams::N_THREADS, 0, backward_stream.get()>>>(a->dev_data.get(), b->dev_grad.get(), c->dev_grad.get(), sp->dev_indptr.get(), sp->dev_indices.get(), m, p);
@@ -247,8 +159,6 @@ void SparseMatmul::backward(const smart_stream &backward_stream) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-
-    // timer_stop(TMR_SPMATMUL_BW);
 }
 
 // GRAPHSUM
@@ -276,25 +186,18 @@ __global__ void graphsum_kernel(const real *a, const real *b, real *c, const nat
 
 void GraphSum::forward(bool training, const smart_stream &stream) const
 {
-
-    // timer_start(TMR_GRAPHSUM_FW);
-
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     graphsum_kernel<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(dev_graph_value.get(), in->dev_data.get(), out->dev_data.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-
-    // timer_stop(TMR_GRAPHSUM_FW);
 }
 
 // ###############################################################################
 
 void GraphSum::backward(const smart_stream &backward_stream) const
 {
-    // timer_start(TMR_GRAPHSUM_BW);
-
     const natural numNodes = graph->indptr_size - 1;
     const natural n_blocks = std::min(CEIL(numNodes * dim, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     graphsum_kernel<<<n_blocks, CudaParams::N_THREADS, 0, backward_stream.get()>>>(dev_graph_value.get(), out->dev_grad.get(), in->dev_grad.get(), graph->dev_indptr.get(), graph->dev_indices.get(), numNodes, dim);
@@ -303,8 +206,6 @@ void GraphSum::backward(const smart_stream &backward_stream) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-
-    // timer_stop(TMR_GRAPHSUM_BW);
 }
 
 // RELU
@@ -333,15 +234,11 @@ __global__ void relu_kernel_forward(real *dev_data, bool *dev_mask, const natura
 
 void ReLU::forward(bool training, const smart_stream &stream) const
 {
-    // timer_start(TMR_RELU_FW);
-
     const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     relu_kernel_forward<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), in->size, training);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-
-    // timer_stop(TMR_RELU_FW);
 }
 
 // ##################################################################################
@@ -359,15 +256,11 @@ __global__ void relu_kernel_backward(real *d_in_grad, const bool *d_mask, const 
 
 void ReLU::backward(const smart_stream &backward_stream) const
 {
-    // timer_start(TMR_RELU_BW);
-
     const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
     relu_kernel_backward<<<n_blocks, CudaParams::N_THREADS, 0, backward_stream.get()>>>(in->dev_grad.get(), dev_mask.get(), in->size);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-
-    // timer_stop(TMR_RELU_BW);
 }
 
 // MATMUL
@@ -424,8 +317,6 @@ __global__ void matmul_kernel_forward(const real *a, const real *b, real *c, con
 
 void Matmul::forward(bool training, const smart_stream &stream) const
 {
-    // timer_start(TMR_MATMUL_FW);
-
     const dim3 n_blocks(CEIL(p, CudaParams::TILE_DIM), CEIL(m, CudaParams::TILE_DIM));
     const dim3 n_threads(CudaParams::TILE_DIM, CudaParams::TILE_DIM);
     cudaStreamWaitEvent(stream.get(), event_forward.get());
@@ -433,8 +324,6 @@ void Matmul::forward(bool training, const smart_stream &stream) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-
-    // timer_stop(TMR_MATMUL_FW);
 }
 
 // ##################################################################################
@@ -483,7 +372,24 @@ __global__ void matmul_kernel_backward_1(real *a, const real *b, const real *c, 
         a[row * n + col] = res;
 }
 
-// second version with long internal loop abd shared memory
+// first version with atomicAdd
+__global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
+{
+    natural id = blockIdx.x * blockDim.x + threadIdx.x;
+#pragma unroll
+    for (natural i = id; i < m * p; i += blockDim.x * gridDim.x)
+    {
+        natural row = i / p;
+        natural col = i % p;
+        // i = row * p + col
+        const real c_val = c[i];
+#pragma unroll
+        for (natural j = 0; j < n; j++)
+            atomicAdd(&b[j * p + col], c_val * a[row * n + j]);
+    }
+}
+
+// second version with long internal loop and shared memory
 /*
 __global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
 {
@@ -546,28 +452,8 @@ void Matmul::backward(const smart_stream &backward_stream) const
 }
 */
 
-// first version with atomicAdd
-
-__global__ void matmul_kernel_backward_2(const real *a, real *b, const real *c, const natural m, const natural n, const natural p)
-{
-    natural id = blockIdx.x * blockDim.x + threadIdx.x;
-#pragma unroll
-    for (natural i = id; i < m * p; i += blockDim.x * gridDim.x)
-    {
-        natural row = i / p;
-        natural col = i % p;
-        // i = row * p + col
-        const real c_val = c[i];
-#pragma unroll
-        for (natural j = 0; j < n; j++)
-            atomicAdd(&b[j * p + col], c_val * a[row * n + j]);
-    }
-}
-
 void Matmul::backward(const smart_stream &backward_stream) const
 {
-    // timer_start(TMR_MATMUL_BW);
-
     const dim3 n_blocks_1(CEIL(n, CudaParams::TILE_DIM), CEIL(m, CudaParams::TILE_DIM));
     const dim3 n_threads(CudaParams::TILE_DIM, CudaParams::TILE_DIM);
     matmul_kernel_backward_1<<<n_blocks_1, n_threads, 0, backward_stream.get()>>>(a->dev_grad.get(), b->dev_data.get(), c->dev_grad.get(), m, n, p);
@@ -582,8 +468,6 @@ void Matmul::backward(const smart_stream &backward_stream) const
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-
-    // timer_stop(TMR_MATMUL_BW);
 }
 
 // CROSSENTROPYLOSS
@@ -640,9 +524,6 @@ __global__ void cross_entropy_loss_kernel(real *dev_data, real *dev_grad, const 
 
 void CrossEntropyLoss::forward(bool training, const smart_stream &stream) const
 {
-
-    // timer_start(TMR_LOSS_FW);
-
     if (training)
         logits->zero_grad(stream);
 
@@ -656,8 +537,6 @@ void CrossEntropyLoss::forward(bool training, const smart_stream &stream) const
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
     dev_loss_res.copy_to_host_async(loss.get(), stream);
-
-    // timer_stop(TMR_LOSS_FW);
 }
 
 // ##################################################################################

@@ -95,6 +95,7 @@ class GCN
   pinned_host_ptr<real> pinned_l2;
   pinned_host_ptr<real> loss;
   pinned_host_ptr<natural> pinned_wrong;
+  std::string variables_info;
 
   void set_input(smart_stream stream, bool first) const;
   void set_truth(const natural current_split, smart_stream stream) const;
@@ -109,7 +110,10 @@ class GCN
   void insert_last_layer();
   void insert_layer(const natural input_dim, const natural output_dim, const real dropout, const natural layer_index);
 
+  void print_variable_info() const;
+
 public:
+  real output_for_tuning;
   const GCNParams *params;
   const AdamParams *adam_params;
   GCN(GCNParams const *params_, AdamParams const *adam_params_, GCNData const *data_);

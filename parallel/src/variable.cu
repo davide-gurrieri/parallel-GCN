@@ -7,33 +7,27 @@ __global__ void initialize_var_random_kernel(randState *dev_rand_states, const n
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
 #pragma unroll
     for (natural i = id; i < size; i += blockDim.x * gridDim.x)
-        curand_init(seed * i, i, 0, &dev_rand_states[i]); // curand_init(seed, sequence, offset, &state);
+        curand_init(seed, i, 0, &dev_rand_states[i]); // curand_init(seed, sequence, offset, &state);
 }
 
-/*
-Variable::Variable(const natural size_, const bool requires_grad, const bool weights) : size(size_)
+void Variable::initialize_random()
 {
-    dev_data = dev_shared_ptr<real>(size);
-    if (requires_grad)
-        dev_grad = dev_shared_ptr<real>(size);
-    else
-        dev_grad = dev_shared_ptr<real>();
+    natural max_size = 0;
+    for (const natural &size : sizes)
+        max_size = std::max(max_size, size);
+    const natural state_size = CEIL(max_size, 4);
+    dev_rand_states = dev_shared_ptr<randState>(state_size);
 
-    if (weights)
-    {
-        dev_rand_states = dev_shared_ptr<randState>(size);
-
-        const natural n_blocks = std::min(CEIL(size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
-        initialize_var_random_kernel<<<n_blocks, CudaParams::N_THREADS>>>(dev_rand_states.get(), CudaParams::SEED, size);
+    const natural n_blocks = std::min(CEIL(state_size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    initialize_var_random_kernel<<<n_blocks, CudaParams::N_THREADS>>>(dev_rand_states.get(), CudaParams::SEED, state_size);
 #ifdef DEBUG_CUDA
-        CHECK_CUDA_ERROR(cudaGetLastError());
+    CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
-    }
-    std::cout << "Variable: " << size << std::endl;
 }
-*/
 
-Variable::Variable(const natural size_, const bool requires_grad, const bool weights, const natural rows_, const natural cols_) : size(size_), rows(rows_), cols(cols_)
+// ##################################################################################
+
+Variable::Variable(const natural size_, const bool requires_grad, const bool rand, const natural rows_, const natural cols_) : size(size_), rows(rows_), cols(cols_)
 {
     dev_data = dev_shared_ptr<real>(size);
     if (requires_grad)
@@ -41,10 +35,8 @@ Variable::Variable(const natural size_, const bool requires_grad, const bool wei
     else
         dev_grad = dev_shared_ptr<real>();
 
-    if (weights)
+    if (rand)
         sizes.push_back(size);
-
-    std::cout << "Variable: " << size << std::endl;
 }
 
 // ##################################################################################
@@ -72,7 +64,12 @@ void Variable::glorot() const
 {
     if (!dev_rand_states.get())
     {
-        std::cerr << "Variable::glorot: Variable must be initialized with weights = true" << std::endl;
+        std::cerr << "Variable::glorot: Variable must be initialized with rand = true" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    if (rows == 0 || cols == 0)
+    {
+        std::cerr << "Variable::glorot: rows and cols must be set" << std::endl;
         exit(EXIT_FAILURE);
     }
     const double range = sqrtf(6.0f / (rows + cols));
@@ -171,20 +168,4 @@ void Variable::save(const std::string &file_name, const std::string &what, natur
     {
         std::cerr << "Unable to open file: " << file_name << std::endl;
     }
-}
-
-void Variable::initialize_random()
-{
-    natural max_size = 0;
-    for (const natural &size : sizes)
-        max_size = std::max(max_size, size);
-    const natural state_size = CEIL(max_size, 4);
-    dev_rand_states = dev_shared_ptr<randState>(state_size);
-
-    const natural n_blocks = std::min(CEIL(state_size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
-    initialize_var_random_kernel<<<n_blocks, CudaParams::N_THREADS>>>(dev_rand_states.get(), CudaParams::SEED, state_size);
-#ifdef DEBUG_CUDA
-    CHECK_CUDA_ERROR(cudaGetLastError());
-#endif
-    std::cout << "random state: " << state_size << std::endl;
 }

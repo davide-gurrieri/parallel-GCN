@@ -17,7 +17,7 @@ public:
     dev_shared_ptr<real> dev_grad;
     natural size, rows, cols;
 
-    Variable(const natural size_, const bool requires_grad = true, const bool weights = false, const natural rows_ = 0, const natural cols_ = 0);
+    Variable(const natural size_, const bool requires_grad = true, const bool rand = false, const natural rows_ = 0, const natural cols_ = 0);
     Variable() = default;
     void print(const std::string &what, natural col) const;
     void save(const std::string &file_name, const std::string &what, natural col) const;

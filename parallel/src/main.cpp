@@ -1,7 +1,4 @@
-#ifdef DYNAMIC_INPUT
 #include "../include/GetPot"
-#endif
-
 #include "../include/gcn.cuh"
 #include "../include/optim.cuh"
 #include "../include/parser.h"
@@ -13,7 +10,7 @@ int main(int argc, char **argv) {
 
 // setbuf(stdout, NULL);
 //  Print device informations
-#ifndef TUNE_CUDA
+#ifndef NO_OUTPUT
   print_gpu_info();
 #endif
 
@@ -31,7 +28,7 @@ int main(int argc, char **argv) {
   AdamParams adam_params;
   GetPot command_line(argc, argv);
 
-#ifdef TUNE_CUDA
+#ifdef NO_OUTPUT
   const std::string file_name = command_line("file", "./parameters.txt");
 #else
   const std::string name =
@@ -42,7 +39,7 @@ int main(int argc, char **argv) {
   GetPot datafile(file_name.c_str());
 
 // Parse parameters
-#ifdef TUNE_CUDA
+#ifdef NO_OUTPUT
   parse_parameters(datafile, params, adam_params, false);
 #else
   parse_parameters(datafile, params, adam_params, true);
@@ -57,7 +54,7 @@ int main(int argc, char **argv) {
   }
 
 // print parsed parameters
-#ifndef TUNE_CUDA
+#ifndef NO_OUTPUT
   params.print_info();
 #endif
 

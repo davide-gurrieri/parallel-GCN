@@ -20,7 +20,7 @@ namespace CudaParams
   constexpr natural N_THREADS_DROPOUT = 32;
   inline natural N_BLOCKS; // 8 * 16 with 16 number of SM (multiProcessorCount)
   constexpr natural TILE_DIM = 16;
-  constexpr natural SEED = 42;
+  inline natural SEED = 42;
 }
 
 #ifdef DEBUG_CUDA
