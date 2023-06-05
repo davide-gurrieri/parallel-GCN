@@ -21,7 +21,8 @@ int main(int argc, char **argv) {
   CudaParams::N_BLOCKS = 5 * devProp.multiProcessorCount;
   CudaParams::N_THREADS = 128;
 
-  const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed"};
+  const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed",
+                                                "reddit"};
   const std::vector<natural> threads = {128, 256, 512, 1024};
 
   for (const auto &input_name : input_names) {
@@ -53,12 +54,12 @@ int main(int argc, char **argv) {
         CudaParams::N_THREADS = num_threads;
 
         // run the algorithm
-        const natural rep = 100;
+        natural rep = (input_name == "reddit") ? 5 : 100;
         real sum = 0;
         for (natural i = 0; i < rep; i++) {
           tmr_sum[0] = 0;
           gcn.run();
-          sum += gcn.output_for_tuning;
+          sum += gcn.avg_epoch_time;
         }
         sum /= rep;
 
@@ -74,8 +75,8 @@ int main(int argc, char **argv) {
         file << to_write << std::endl;
       }
     }
+    Variable::sizes.clear();
   }
-
   Variable::dev_rand_states.~dev_shared_ptr();
 
   return EXIT_SUCCESS;

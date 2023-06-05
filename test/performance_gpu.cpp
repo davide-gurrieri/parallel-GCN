@@ -43,14 +43,14 @@ int main(int argc, char **argv) {
     GCN gcn(&params, &adam_params, &data);
 
     if (input_name == "citeseer") {
-      CudaParams::N_BLOCKS = 5 * devProp.multiProcessorCount;
+      CudaParams::N_BLOCKS = 6 * devProp.multiProcessorCount;
       CudaParams::N_THREADS = 128;
     } else if (input_name == "cora") {
-      CudaParams::N_BLOCKS = 5 * devProp.multiProcessorCount;
-      CudaParams::N_THREADS = 128;
+      CudaParams::N_BLOCKS = 6 * devProp.multiProcessorCount;
+      CudaParams::N_THREADS = 1024;
     } else if (input_name == "pubmed") {
-      CudaParams::N_BLOCKS = 5 * devProp.multiProcessorCount;
-      CudaParams::N_THREADS = 128;
+      CudaParams::N_BLOCKS = 8 * devProp.multiProcessorCount;
+      CudaParams::N_THREADS = 256;
     }
 
     std::cout << std::endl;
@@ -64,11 +64,11 @@ int main(int argc, char **argv) {
     for (natural i = 0; i < rep; i++) {
       tmr_sum[0] = 0;
       gcn.run();
-      file << gcn.output_for_tuning << " ";
+      file << gcn.avg_epoch_time << " ";
     }
     file << std::endl;
+    Variable::sizes.clear();
   }
-
   Variable::dev_rand_states.~dev_shared_ptr();
 
   return EXIT_SUCCESS;
