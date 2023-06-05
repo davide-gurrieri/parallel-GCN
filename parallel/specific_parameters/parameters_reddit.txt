@@ -4,7 +4,7 @@
 n_layers = 2
 hidden_dims = 16
 dropouts = 0.5,0.5
-epochs = 1000
+epochs = 100
 early_stopping = 0
 
 #-------------------------------------------------
@@ -19,5 +19,6 @@ eps = 1e-8
 #-------------------------------------------------
 # Parameters for Cuda
 #-------------------------------------------------
-num_blocks_factor = 13
+num_blocks_factor = 8
 num_threads = 512
+seed = 19990304
