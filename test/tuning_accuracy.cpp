@@ -30,15 +30,44 @@ int main(int argc, char **argv) {
   const std::vector<natural> early_stopping_values = {10, 20};
   const std::vector<real> weight_decay_values = {5e-5, 5e-4, 5e-3, 5e-2};
   */
+  std::vector<std::string> input_names = {"citeseer", "cora", "pubmed"};
 
-  const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed"};
-  const std::vector<natural> n_layers_values = {2, 3, 4};
-  const std::vector<real> dropout_values = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
-  const std::vector<natural> hidden_dim_values = {8, 16, 32, 64};
-  const std::vector<natural> early_stopping_values = {10, 20};
-  const std::vector<real> weight_decay_values = {5e-5, 5e-4, 5e-3, 5e-2};
+#ifdef SECOND
+#ifdef NO_FEATURE
+  input_names = {"cora"};
+#else
+  input_names = {"citeseer", "pubmed"};
+#endif
+#endif
+
+  std::vector<natural> n_layers_values = {2, 3, 4};
+  std::vector<real> dropout_values = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  std::vector<natural> hidden_dim_values = {8, 16, 32, 64};
+  std::vector<natural> early_stopping_values = {10, 20};
+  std::vector<real> weight_decay_values = {5e-5, 5e-4, 5e-3, 5e-2};
 
   for (const auto &input_name : input_names) {
+#ifdef SECOND
+    if (input_name == "citeseer") {
+      n_layers_values = {2};
+      dropout_values = {0.2, 0.3, 0.4};
+      hidden_dim_values = {48, 56, 72, 80};
+      early_stopping_values = {10};
+      weight_decay_values = {1e-3, 1e-2};
+    } else if (input_name == "cora") {
+      n_layers_values = {3};
+      dropout_values = {0.2, 0.3, 0.4};
+      hidden_dim_values = {48, 56, 72, 80};
+      early_stopping_values = {10};
+      weight_decay_values = {1e-3, 1e-2};
+    } else if (input_name == "pubmed") {
+      n_layers_values = {3};
+      dropout_values = {0.0, 0.2, 0.3};
+      hidden_dim_values = {24, 40, 48};
+      early_stopping_values = {15, 20, 25};
+      weight_decay_values = {1e-5, 1e-4, 1e-3};
+    }
+#endif
     GCNParams params;
     AdamParams adam_params;
     params.epochs = 1000;
@@ -56,11 +85,16 @@ int main(int argc, char **argv) {
       exit(EXIT_FAILURE);
     }
 // Open output file
+#ifdef SECOND
+    std::ofstream file("./output/tuning_accuracy_second_" + input_name +
+                       ".txt");
+#else
 #ifndef NO_FEATURE
     std::ofstream file("./output/tuning_accuracy_" + input_name + ".txt");
 #else
     std::ofstream file("./output/tuning_accuracy_no_feature_" + input_name +
                        ".txt");
+#endif
 #endif
     if (!file.is_open()) {
       std::cerr << "Could not open file" << std::endl;
