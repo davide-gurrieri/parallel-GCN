@@ -94,7 +94,7 @@ void GCN::insert_layer(const natural input_dim, const natural output_dim, const 
     shared_ptr<Variable> layer_var1 = variables.back();
     variables_info += "layer" + std::to_string(layer_index + 1) + "_var1:   " + std::to_string(layer_var1->size) + "\n";
 
-    variables.push_back(std::make_shared<Variable>(params->input_dim * params->output_dim, true, true, input_dim, output_dim));
+    variables.push_back(std::make_shared<Variable>(input_dim * output_dim, true, true, input_dim, output_dim));
     shared_ptr<Variable> layer_weight = variables.back();
     variables_info += "layer" + std::to_string(layer_index + 1) + "_weight: " + std::to_string(layer_weight->size) + "\n";
     weights.push_back(layer_weight);
