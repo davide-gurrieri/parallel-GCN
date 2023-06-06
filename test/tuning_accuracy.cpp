@@ -34,9 +34,9 @@ int main(int argc, char **argv) {
 
 #ifdef SECOND
 #ifdef NO_FEATURE
-  input_names = {"cora"};
+  input_names = {"cora", "pubmed"};
 #else
-  input_names = {"citeseer", "pubmed"};
+  input_names = {"citeseer"};
 #endif
 #endif
 
@@ -56,16 +56,16 @@ int main(int argc, char **argv) {
       weight_decay_values = {1e-3, 1e-2};
     } else if (input_name == "cora") {
       n_layers_values = {3};
-      dropout_values = {0.2, 0.3, 0.4};
+      dropout_values = {0.3, 0.4};
       hidden_dim_values = {48, 56, 72, 80};
       early_stopping_values = {10};
-      weight_decay_values = {1e-3, 1e-2};
+      weight_decay_values = {1e-4, 1e-3};
     } else if (input_name == "pubmed") {
-      n_layers_values = {3};
-      dropout_values = {0.0, 0.2, 0.3};
-      hidden_dim_values = {24, 40, 48};
-      early_stopping_values = {15, 20, 25};
-      weight_decay_values = {1e-5, 1e-4, 1e-3};
+      n_layers_values = {2};
+      dropout_values = {0.0, 0.1};
+      hidden_dim_values = {40, 48, 56};
+      early_stopping_values = {20};
+      weight_decay_values = {1e-4, 1e-3};
     }
 #endif
     GCNParams params;
