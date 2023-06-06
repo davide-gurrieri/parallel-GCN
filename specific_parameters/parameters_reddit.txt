@@ -2,16 +2,16 @@
 # Parameters for GCN
 #-------------------------------------------------
 n_layers = 2
-hidden_dims = 16
-dropouts = 0.5,0.5
-epochs = 100
+hidden_dims = 600
+dropouts = 0.0,0.1
+epochs = 5000
 early_stopping = 0
 
 #-------------------------------------------------
 # Parameters for Adam
 #-------------------------------------------------
 learning_rate = 0.01
-weight_decay = 5e-4
+weight_decay = 5e-5
 beta1 = 0.9
 beta2 = 0.999
 eps = 1e-8
