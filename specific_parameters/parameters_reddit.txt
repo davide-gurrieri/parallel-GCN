@@ -19,6 +19,6 @@ eps = 1e-8
 #-------------------------------------------------
 # Parameters for Cuda
 #-------------------------------------------------
-num_blocks_factor = 8
+num_blocks_factor = 16
 num_threads = 512
 seed = 19990304
