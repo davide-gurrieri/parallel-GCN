@@ -25,6 +25,10 @@ performance-gpu: test/performance_gpu.cpp $(CXXFILES) $(HFILES)
 tuning-accuracy: test/tuning_accuracy.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
 	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -o exec/tuning-accuracy $(CXXFILES) test/tuning_accuracy.cpp
+
+tuning-accuracy-no-feature: test/tuning_accuracy.cpp $(CXXFILES) $(HFILES)
+	mkdir -p exec
+	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -DNO_FEATURE -o exec/tuning-accuracy-no-feature $(CXXFILES) test/tuning_accuracy.cpp
 	
 clean:
 	rm exec/*
