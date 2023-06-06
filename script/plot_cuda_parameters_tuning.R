@@ -36,8 +36,8 @@ save_svg_plot = function(plot,
 
 folder = paste(here(), "/script", sep = "")
 setwd(folder)
-names = c("citeseer", "cora", "pubmed")
-plots = vector("list", length = 3)
+names = c("citeseer", "cora", "pubmed", "reddit")
+plots = vector("list", length = 4)
 i = 1
 for (name in names)
 {
