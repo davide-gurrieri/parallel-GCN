@@ -33,10 +33,10 @@ int main(int argc, char **argv) {
 
   const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed"};
   const std::vector<natural> n_layers_values = {2, 3, 4};
-  const std::vector<real> dropout_values = {0.0, 0.1};
-  const std::vector<natural> hidden_dim_values = {8, 16};
-  const std::vector<natural> early_stopping_values = {10};
-  const std::vector<real> weight_decay_values = {5e-4};
+  const std::vector<real> dropout_values = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  const std::vector<natural> hidden_dim_values = {8, 16, 32, 64};
+  const std::vector<natural> early_stopping_values = {10, 20};
+  const std::vector<real> weight_decay_values = {5e-5, 5e-4, 5e-3, 5e-2};
 
   for (const auto &input_name : input_names) {
     GCNParams params;
