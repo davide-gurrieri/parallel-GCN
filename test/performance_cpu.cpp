@@ -11,7 +11,8 @@ int main(int argc, char **argv) {
   GCNParams params = GCNParams::get_default();
   GCNData data;
 
-  const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed"};
+  const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed",
+                                                "reddit"};
 
   std::ofstream file("./output/performance_cpu.txt");
   if (!file.is_open()) {
@@ -38,7 +39,7 @@ int main(int argc, char **argv) {
 
     // run the algorithm
     file << input_name << " ";
-    const unsigned rep = 200;
+    const unsigned rep = (input_name == "reddit") ? 5 : 50;
     for (unsigned i = 0; i < rep; i++) {
       reset_timer();
       gcn.run();
