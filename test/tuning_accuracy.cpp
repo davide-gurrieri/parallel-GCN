@@ -24,6 +24,7 @@ int main(int argc, char **argv) {
 
   /*
   const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed"};
+  const std::vector<natural> n_layers_values = {2, 3, 4};
   const std::vector<real> dropout_values = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
   const std::vector<natural> hidden_dim_values = {8, 16, 32, 64};
   const std::vector<natural> early_stopping_values = {10, 20};
@@ -31,10 +32,11 @@ int main(int argc, char **argv) {
   */
 
   const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed"};
-  const std::vector<real> dropout_values = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5};
-  const std::vector<natural> hidden_dim_values = {8, 16, 32, 64};
-  const std::vector<natural> early_stopping_values = {10, 20};
-  const std::vector<real> weight_decay_values = {5e-5, 5e-4, 5e-3, 5e-2};
+  const std::vector<natural> n_layers_values = {2, 3, 4};
+  const std::vector<real> dropout_values = {0.0, 0.1};
+  const std::vector<natural> hidden_dim_values = {8, 16};
+  const std::vector<natural> early_stopping_values = {10};
+  const std::vector<real> weight_decay_values = {5e-4};
 
   for (const auto &input_name : input_names) {
     GCNParams params;
@@ -53,15 +55,21 @@ int main(int argc, char **argv) {
       std::cerr << "Cannot read input: " << input_name << std::endl;
       exit(EXIT_FAILURE);
     }
-    // Open output file
+// Open output file
+#ifndef NO_FEATURE
     std::ofstream file("./output/tuning_accuracy_" + input_name + ".txt");
+#else
+    std::ofstream file("./output/tuning_accuracy_no_feature_" + input_name +
+                       ".txt");
+#endif
     if (!file.is_open()) {
       std::cerr << "Could not open file" << std::endl;
       return EXIT_FAILURE;
     }
     // heading
-    std::string heading = "early_stopping hidden_dim weight_decay dropout1 "
-                          "dropout2 last_val_accuracy";
+    std::string heading =
+        "n_layers early_stopping hidden_dim weight_decay dropout1 "
+        "dropout2 last_val_accuracy";
     file << heading << std::endl;
 
     // Set optimal cuda parameters
@@ -76,40 +84,48 @@ int main(int argc, char **argv) {
       CudaParams::N_THREADS = 256;
     }
     // Explore parameters values
-    for (const natural &early_stopping : early_stopping_values) {
-      params.early_stopping = early_stopping;
-      for (const natural &hidden_dim : hidden_dim_values) {
-        params.hidden_dims = {hidden_dim};
-        for (const real &weight_decay : weight_decay_values) {
-          adam_params.weight_decay = weight_decay;
-          for (const real &dropout1 : dropout_values) {
-            for (const real &dropout2 : dropout_values) {
-              params.dropouts = {dropout1, dropout2};
-
-              // run the algorithm
-              natural rep = 5;
-              real sum = 0;
-              for (natural i = 0; i < rep; i++) {
-                // GCN object creation
-                GCN gcn(&params, &adam_params, &data);
-                reset_timer();
-                gcn.run();
-                sum += gcn.last_val_accuracy;
+    for (const auto &n_layers : n_layers_values) {
+      params.n_layers = n_layers;
+      for (const natural &early_stopping : early_stopping_values) {
+        params.early_stopping = early_stopping;
+        for (const natural &hidden_dim : hidden_dim_values) {
+          params.hidden_dims = std::vector<natural>(n_layers - 1, hidden_dim);
+          for (const real &weight_decay : weight_decay_values) {
+            adam_params.weight_decay = weight_decay;
+            for (const real &dropout1 : dropout_values) {
+              for (const real &dropout2 : dropout_values) {
+                params.dropouts.clear();
+                params.dropouts.push_back(dropout1);
+                std::vector<real> rep_dropouts(n_layers - 1, dropout2);
+                params.dropouts.insert(params.dropouts.end(),
+                                       rep_dropouts.begin(),
+                                       rep_dropouts.end());
+                // run the algorithm
+                natural rep = 3;
+                real sum = 0;
+                for (natural i = 0; i < rep; i++) {
+                  // GCN object creation
+                  GCN gcn(&params, &adam_params, &data);
+                  reset_timer();
+                  gcn.run();
+                  sum += gcn.last_val_accuracy;
+                }
+                sum /= rep;
+                std::string to_write = std::to_string(n_layers) + " " +
+                                       std::to_string(early_stopping) + " " +
+                                       std::to_string(hidden_dim) + " " +
+                                       std::to_string(weight_decay) + " " +
+                                       std::to_string(dropout1) + " " +
+                                       std::to_string(dropout2) + " " +
+                                       std::to_string(sum);
+                file << to_write << std::endl;
               }
-              sum /= rep;
-              std::string to_write = std::to_string(early_stopping) + " " +
-                                     std::to_string(hidden_dim) + " " +
-                                     std::to_string(weight_decay) + " " +
-                                     std::to_string(dropout1) + " " +
-                                     std::to_string(dropout2) + " " +
-                                     std::to_string(sum);
-              file << to_write << std::endl;
             }
           }
         }
+        Variable::sizes.clear();
       }
     }
-    Variable::sizes.clear();
   }
   Variable::dev_rand_states.~dev_shared_ptr();
 
