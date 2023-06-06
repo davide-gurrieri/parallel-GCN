@@ -13,16 +13,8 @@ int main(int argc, char **argv) {
   cudaGetDevice(&dev);
   cudaGetDeviceProperties(&devProp, dev);
 
-  GCNParams params;
-  AdamParams adam_params;
-
-  params.hidden_dims = std::vector<natural>(1, 16);
-  params.dropouts = std::vector<real>(2, 0.5);
-  CudaParams::SEED = 19990304;
-  CudaParams::N_BLOCKS = 5 * devProp.multiProcessorCount;
-  CudaParams::N_THREADS = 128;
-
-  const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed"};
+  const std::vector<std::string> input_names = {"citeseer", "cora", "pubmed",
+                                                "reddit"};
 
   std::ofstream file("./output/performance_gpu.txt");
   if (!file.is_open()) {
@@ -31,6 +23,9 @@ int main(int argc, char **argv) {
   }
 
   for (const auto &input_name : input_names) {
+    GCNParams params;
+    AdamParams adam_params;
+
     // Parse data
     GCNData data;
     Parser parser(&params, &data, input_name);
@@ -39,19 +34,22 @@ int main(int argc, char **argv) {
       exit(EXIT_FAILURE);
     }
 
-    // GCN object creation
-    GCN gcn(&params, &adam_params, &data);
-
     if (input_name == "citeseer") {
       CudaParams::N_BLOCKS = 6 * devProp.multiProcessorCount;
       CudaParams::N_THREADS = 128;
     } else if (input_name == "cora") {
-      CudaParams::N_BLOCKS = 6 * devProp.multiProcessorCount;
+      CudaParams::N_BLOCKS = 2 * devProp.multiProcessorCount;
       CudaParams::N_THREADS = 1024;
     } else if (input_name == "pubmed") {
       CudaParams::N_BLOCKS = 8 * devProp.multiProcessorCount;
       CudaParams::N_THREADS = 256;
+    } else if (input_name == "reddit") {
+      CudaParams::N_BLOCKS = 16 * devProp.multiProcessorCount;
+      CudaParams::N_THREADS = 512;
     }
+
+    // GCN object creation
+    GCN gcn(&params, &adam_params, &data);
 
     std::cout << std::endl;
     std::cout << "##################### " + input_name +
@@ -60,13 +58,30 @@ int main(int argc, char **argv) {
 
     // run the algorithm
     file << input_name << " ";
-    const natural rep = 200;
+    const natural rep = (input_name == "reddit") ? 20 : 200;
+    real sum = 0;
+    real sum2 = 0;
     for (natural i = 0; i < rep; i++) {
-      tmr_sum[0] = 0;
+      reset_timer();
       gcn.run();
       file << gcn.avg_epoch_time << " ";
+      sum += gcn.total_time;
+      sum2 += gcn.avg_epoch_time;
     }
+    sum /= rep;
+    sum2 /= rep;
     file << std::endl;
+    std::cout << std::endl;
+    std::cout << "Average total training + evaluation time of " << params.epochs
+              << " epochs calculated over " << rep
+              << " executions:" << std::endl;
+    std::cout << sum << "s" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Average epoch time calculated over " << rep << " x "
+              << params.epochs << " executions:" << std::endl;
+    std::cout << sum2 << "ms" << std::endl;
+    std::cout << std::endl;
+
     Variable::sizes.clear();
   }
   Variable::dev_rand_states.~dev_shared_ptr();

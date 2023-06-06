@@ -40,8 +40,8 @@ public:
 struct GCNParams
 {
   natural num_nodes, input_dim, output_dim;
-  std::vector<natural> hidden_dims;
-  std::vector<real> dropouts;
+  std::vector<natural> hidden_dims = {16};
+  std::vector<real> dropouts = {0.5, 0.5};
   natural epochs{100}, early_stopping{0};
   natural train_dim{0}, val_dim{0}, test_dim{0};
   natural n_layers{2};
@@ -114,6 +114,7 @@ class GCN
 
 public:
   real avg_epoch_time;
+  real total_time;
   real last_val_accuracy;
   const GCNParams *params;
   const AdamParams *adam_params;

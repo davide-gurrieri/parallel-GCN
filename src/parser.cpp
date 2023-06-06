@@ -210,6 +210,7 @@ bool Parser::parse() {
 
 void parse_parameters(GetPot &datafile, GCNParams &params,
                       AdamParams &adam_params, bool print) {
+#ifdef PART2
   // GCNParams
   params.n_layers = datafile("n_layers", 0);
   params.hidden_dims = string2vec<natural>(datafile("hidden_dims", ""));
@@ -232,6 +233,7 @@ void parse_parameters(GetPot &datafile, GCNParams &params,
   adam_params.beta1 = datafile("beta1", 0.0);
   adam_params.beta2 = datafile("beta2", 0.0);
   adam_params.eps = datafile("eps", 0.0);
+#endif
 
   // CudaParams
   int dev;
@@ -244,7 +246,7 @@ void parse_parameters(GetPot &datafile, GCNParams &params,
   CudaParams::SEED = datafile("seed", 0);
 
   if (print) {
-    std::cout << "PARSED PARAMETERS FROM GETPOT" << std::endl;
+    std::cout << "PARAMETERS PARSED FROM GETPOT:" << std::endl;
     std::cout << "n_layers: " << params.n_layers << std::endl;
     std::cout << "hidden_dims: ";
     for (auto i : params.hidden_dims)

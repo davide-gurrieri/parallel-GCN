@@ -23,22 +23,13 @@ int main(int argc, char **argv) {
 
   std::string input_name(argv[1]);
 
-  // Read parameters at runtime from "parameters.txt" using GetPot
+  // Parse parameters at runtime using GetPot
   GCNParams params;
   AdamParams adam_params;
   GetPot command_line(argc, argv);
-
-#ifdef NO_OUTPUT
-  const std::string file_name = command_line("file", "./parameters.txt");
-#else
-  const std::string name =
-      "./specific_parameters/parameters_" + input_name + ".txt";
+  const std::string name = "./parameters/parameters_" + input_name + ".txt";
   const std::string file_name = command_line("file", name.c_str());
-#endif
-
   GetPot datafile(file_name.c_str());
-
-// Parse parameters
 #ifdef NO_OUTPUT
   parse_parameters(datafile, params, adam_params, false);
 #else
@@ -53,7 +44,7 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
-// print parsed parameters
+  // Print parsed parameters
 #ifndef NO_OUTPUT
   params.print_info();
 #endif
@@ -61,9 +52,10 @@ int main(int argc, char **argv) {
   // GCN object creation
   GCN gcn(&params, &adam_params, &data);
 
-  // run the algorithm
+  // Run the algorithm
   gcn.run();
 
+  // Free static member memory
   Variable::dev_rand_states.~dev_shared_ptr();
 
   return EXIT_SUCCESS;

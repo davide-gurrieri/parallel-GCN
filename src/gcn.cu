@@ -15,7 +15,7 @@ GCNSmartObjects::GCNSmartObjects(const natural n_layers) : forward_training_stre
 void GCNParams::print_info() const
 {
     std::cout << std::endl;
-    std::cout << "PARSED PARAMETERS FROM DATA:" << std::endl;
+    std::cout << "PARAMETERS PARSED FROM DATA:" << std::endl;
     std::cout << "Number of nodes: " << num_nodes << std::endl;
     std::cout << "Number of features: " << input_dim << std::endl;
     std::cout << "Number of labels: " << output_dim << std::endl;
@@ -346,6 +346,9 @@ std::pair<real, real> GCN::train_epoch()
 
 void GCN::run()
 {
+#ifndef NO_OUTPUT
+    std::cout << "TRAINING AND EVALUATION OF GCN:" << std::endl;
+#endif
     timer_start(TMR_TOTAL);
     natural epoch = 1;
     // real total_time = 0.0;
@@ -396,15 +399,17 @@ void GCN::run()
     PRINT_TIMER_AVERAGE(TMR_TRAIN, epoch);
 #else
 #ifdef TUNE_CUDA
+#ifndef PERFORMANCE
     PRINT_TIMER_AVERAGE_NO_OUTPUT(TMR_TRAIN, epoch);
+#endif
     avg_epoch_time = TIMER_AVERAGE_NO_OUTPUT(TMR_TRAIN, epoch);
+    total_time = timer_total(TMR_TOTAL);
 #endif
 #ifdef TUNE_ACCURACY
     std::cout << val_acc << std::endl;
     last_val_accuracy = val_acc;
 #endif
 #endif
-
     /*
     PRINT_TIMER_AVERAGE(TMR_MATMUL_FW, epoch);
     PRINT_TIMER_AVERAGE(TMR_MATMUL_BW, epoch);
