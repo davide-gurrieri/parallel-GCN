@@ -7,7 +7,6 @@ using std::shared_ptr;
 using std::unique_ptr;
 
 // #include <cuda_runtime.h>
-
 #include "../include/utils.cuh"
 #include "../include/variable.cuh"
 #include "../include/timer.h"

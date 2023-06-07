@@ -1,18 +1,19 @@
 #ifndef VARIABLE_CUH
 #define VARIABLE_CUH
 
+#include "../include/rand.cuh"
 #include "../include/utils.cuh"
 #include "../include/shared_ptr.cuh"
-#include <vector>
-#include <curand_kernel.h>
 #include "../include/smart_object.cuh"
+
+#include <vector>
 #include <fstream>
 
 class Variable
 {
 public:
     inline static std::vector<natural> sizes;
-    inline static dev_shared_ptr<randState> dev_rand_states;
+    inline static dev_shared_ptr<RandState> dev_rand_states;
     dev_shared_ptr<real> dev_data;
     dev_shared_ptr<real> dev_grad;
     natural size, rows, cols;

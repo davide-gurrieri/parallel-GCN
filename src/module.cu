@@ -13,51 +13,23 @@ Dropout::Dropout(shared_ptr<Variable> in_, real p_) : in(in_), p(p_)
 
 // ##################################################################################
 
-__global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, randState *dev_rand_states,
-                                       const natural size, const natural kernel_size, const real p, const real scale)
+__global__ void dropout_kernel_forward(real *dev_data, bool *dev_mask, RandState *states,
+                                       const natural size, const real p, const real scale)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
     bool keep;
-    natural j;
 #pragma unroll
-    for (natural i = id; i < kernel_size; i += blockDim.x * gridDim.x)
+    for (natural i = id; i < size; i += blockDim.x * gridDim.x)
     {
-        const float4 rand = curand_uniform4(&dev_rand_states[i]);
-        j = i * 4;
-
         if (dev_mask)
         {
-            keep = rand.x >= p;
-            dev_data[j] *= keep ? scale : 0.f;
-            dev_mask[j] = keep;
-            if (++j < size)
-            {
-                keep = rand.y >= p;
-                dev_data[j] *= keep ? scale : 0.f;
-                dev_mask[j] = keep;
-            }
-            if (++j < size)
-            {
-                keep = rand.z >= p;
-                dev_data[j] *= keep ? scale : 0.f;
-                dev_mask[j] = keep;
-            }
-            if (++j < size)
-            {
-                keep = rand.w >= p;
-                dev_data[j] *= keep ? scale : 0.f;
-                dev_mask[j] = keep;
-            }
+            keep = unif(&states[i]) >= p;
+            dev_data[i] *= keep ? scale : 0.f;
+            dev_mask[i] = keep;
         }
         else
         {
-            dev_data[j] *= rand.x >= p ? scale : 0.f;
-            if (++j < size)
-                dev_data[j] *= rand.y >= p ? scale : 0.f;
-            if (++j < size)
-                dev_data[j] *= rand.z >= p ? scale : 0.f;
-            if (++j < size)
-                dev_data[j] *= rand.w >= p ? scale : 0.f;
+            dev_data[i] *= unif(&states[i]) >= p ? scale : 0.f;
         }
     }
 }
@@ -67,9 +39,8 @@ void Dropout::forward(bool training, const smart_stream &stream) const
     if (!training)
         return;
     const real scale = 1.0 / (1.0 - p);
-    const natural kernel_size = CEIL(in->size, 4);
-    const natural n_blocks = std::min(CEIL(kernel_size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
-    dropout_kernel_forward<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), Variable::dev_rand_states.get(), in->size, kernel_size, p, scale);
+    const natural n_blocks = std::min(CEIL(in->size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    dropout_kernel_forward<<<n_blocks, CudaParams::N_THREADS, 0, stream.get()>>>(in->dev_data.get(), dev_mask.get(), Variable::dev_rand_states.get(), in->size, p, scale);
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif

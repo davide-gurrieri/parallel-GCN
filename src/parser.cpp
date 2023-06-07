@@ -243,7 +243,6 @@ void parse_parameters(GetPot &datafile, GCNParams &params,
   CudaParams::N_BLOCKS =
       datafile("num_blocks_factor", 0) * devProp.multiProcessorCount;
   CudaParams::N_THREADS = datafile("num_threads", 0);
-  CudaParams::SEED = datafile("seed", 0);
 
   if (print) {
     std::cout << "PARAMETERS PARSED FROM GETPOT:" << std::endl;

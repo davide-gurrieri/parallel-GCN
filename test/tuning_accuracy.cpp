@@ -71,7 +71,6 @@ int main(int argc, char **argv) {
     GCNParams params;
     AdamParams adam_params;
     params.epochs = 1000;
-    CudaParams::SEED = 19990304;
 
     std::cout << std::endl;
     std::cout << "##################### " + input_name +

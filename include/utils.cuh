@@ -2,7 +2,6 @@
 #define UTILS_CUH
 #include <cmath>
 #include <cuda_runtime.h>
-#include <curand_kernel.h>
 #include <iostream>
 #include <vector>
 #include <sstream>
@@ -10,9 +9,6 @@
 using natural = unsigned;
 using integer = int;
 using real = float;
-// using randState = curandStateXORWOW;
-// using randState = curandState;
-using randState = curandStatePhilox4_32_10_t;
 
 namespace CudaParams
 {
@@ -20,7 +16,6 @@ namespace CudaParams
   constexpr natural N_THREADS_DROPOUT = 32;
   inline natural N_BLOCKS; // 8 * 16 with 16 number of SM (multiProcessorCount)
   constexpr natural TILE_DIM = 16;
-  inline natural SEED = 42;
 }
 
 #ifdef DEBUG_CUDA

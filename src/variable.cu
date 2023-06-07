@@ -2,27 +2,26 @@
 
 // ##################################################################################
 
-__global__ void initialize_var_random_kernel(randState *dev_rand_states, const natural seed, const natural size)
-{
-    natural id = blockIdx.x * blockDim.x + threadIdx.x;
-#pragma unroll
-    for (natural i = id; i < size; i += blockDim.x * gridDim.x)
-        curand_init(seed, i, 0, &dev_rand_states[i]); // curand_init(seed, sequence, offset, &state);
-}
-
 void Variable::initialize_random()
 {
     natural max_size = 0;
     for (const natural &size : sizes)
         max_size = std::max(max_size, size);
-    const natural state_size = CEIL(max_size, 4);
-    dev_rand_states = dev_shared_ptr<randState>(state_size);
 
-    const natural n_blocks = std::min(CEIL(state_size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
-    initialize_var_random_kernel<<<n_blocks, CudaParams::N_THREADS>>>(dev_rand_states.get(), CudaParams::SEED, state_size);
-#ifdef DEBUG_CUDA
-    CHECK_CUDA_ERROR(cudaGetLastError());
-#endif
+    dev_rand_states = dev_shared_ptr<RandState>(max_size);
+    std::vector<RandState> states(max_size);
+    for (auto &state : states)
+    {
+        integer x = 0, y = 0;
+        while (x == 0 || y == 0)
+        {
+            x = rand();
+            y = rand();
+        }
+        state.a = x;
+        state.b = y;
+    }
+    dev_rand_states.copy_to_device(states.data());
 }
 
 // ##################################################################################
@@ -41,23 +40,12 @@ Variable::Variable(const natural size_, const bool requires_grad, const bool ran
 
 // ##################################################################################
 
-__global__ void glorot_kernel(real *data, const natural size, const natural kernel_size, const double scale, randState *state)
+__global__ void glorot_kernel(real *data, const natural size, const double scale, RandState *states)
 {
     natural id = blockIdx.x * blockDim.x + threadIdx.x;
-    natural j;
 #pragma unroll
-    for (natural i = id; i < kernel_size; i += blockDim.x * gridDim.x)
-    {
-        const float4 randoms = curand_uniform4(&state[i]);
-        j = i * 4;
-        data[j] = (randoms.x - 0.5) * scale;
-        if (++j < size)
-            data[j] = (randoms.y - 0.5) * scale;
-        if (++j < size)
-            data[j] = (randoms.z - 0.5) * scale;
-        if (++j < size)
-            data[j] = (randoms.w - 0.5) * scale;
-    }
+    for (natural i = id; i < size; i += blockDim.x * gridDim.x)
+        data[i] = (unif(&states[i]) - 0.5) * scale;
 }
 
 void Variable::glorot() const
@@ -72,11 +60,10 @@ void Variable::glorot() const
         std::cerr << "Variable::glorot: rows and cols must be set" << std::endl;
         exit(EXIT_FAILURE);
     }
-    const double range = sqrtf(6.0f / (rows + cols));
-    const double scale = range * 2;
-    const natural kernel_size = CEIL(size, 4);
-    const natural n_blocks = std::min(CEIL(kernel_size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
-    glorot_kernel<<<n_blocks, CudaParams::N_THREADS>>>(dev_data.get(), size, kernel_size, scale, dev_rand_states.get());
+    const real range = sqrtf(6.0f / (rows + cols));
+    const real scale = range * 2;
+    const natural n_blocks = std::min(CEIL(size, CudaParams::N_THREADS), CudaParams::N_BLOCKS);
+    glorot_kernel<<<n_blocks, CudaParams::N_THREADS>>>(dev_data.get(), size, scale, dev_rand_states.get());
 #ifdef DEBUG_CUDA
     CHECK_CUDA_ERROR(cudaGetLastError());
 #endif
@@ -137,6 +124,8 @@ void Variable::print(const std::string &what, natural col) const
     delete[] data;
 }
 
+// ##################################################################################
+
 void Variable::save(const std::string &file_name, const std::string &what, natural col) const
 {
 
@@ -169,3 +158,5 @@ void Variable::save(const std::string &file_name, const std::string &what, natur
         std::cerr << "Unable to open file: " << file_name << std::endl;
     }
 }
+
+// ##################################################################################

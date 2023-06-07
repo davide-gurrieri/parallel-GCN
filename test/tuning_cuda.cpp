@@ -17,7 +17,6 @@ int main(int argc, char **argv) {
 
   params.hidden_dims = std::vector<natural>(1, 16);
   params.dropouts = std::vector<real>(2, 0.5);
-  CudaParams::SEED = 19990304;
   CudaParams::N_BLOCKS = 5 * devProp.multiProcessorCount;
   CudaParams::N_THREADS = 128;
 
