@@ -9,14 +9,18 @@ void Variable::initialize_random()
         max_size = std::max(max_size, size);
 
     dev_rand_states = dev_shared_ptr<RandState>(max_size);
+
+    std::default_random_engine eng(1);
+    std::uniform_int_distribution<int> distr{0, MY_RAND_MAX};
+
     std::vector<RandState> states(max_size);
     for (auto &state : states)
     {
         integer x = 0, y = 0;
         while (x == 0 || y == 0)
         {
-            x = rand();
-            y = rand();
+            x = distr(eng);
+            y = distr(eng);
         }
         state.a = x;
         state.b = y;

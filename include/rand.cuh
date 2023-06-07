@@ -4,6 +4,8 @@
 #include "../include/shared_ptr.cuh"
 #include "../include/utils.cuh"
 #include <cstdint>
+#include <random>
+#define MY_RAND_MAX 0x7fffffff
 
 struct RandState
 {
