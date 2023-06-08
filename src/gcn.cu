@@ -406,7 +406,7 @@ void GCN::run()
     total_time = timer_total(TMR_TOTAL);
 #endif
 #ifdef TUNE_ACCURACY
-    std::cout << val_acc << std::endl;
+    // std::cout << val_acc << std::endl;
     last_val_accuracy = val_acc;
 #endif
 #endif
