@@ -29,7 +29,7 @@ run-reddit: exec/gcn-par-improvement
 
 gcn-par-no-feature: src/main.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
-	$(CXX) $(CXXFLAGS) -DPART2 -DDEBUG_CUDA -DNO_FEATURE -o exec/gcn-par-no-feature $(CXXFILES) src/main.cpp
+	$(CXX) $(CXXFLAGS)  -DDEBUG_CUDA -DNO_FEATURE -o exec/gcn-par-no-feature $(CXXFILES) src/main.cpp
 
 tuning-cuda: test/tuning_cuda.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
@@ -47,20 +47,20 @@ tuning-accuracy: test/tuning_accuracy.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
 	mkdir -p output
 	mkdir -p output/plot
-	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -o exec/tuning-accuracy $(CXXFILES) test/tuning_accuracy.cpp
+	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -DPART2 -o exec/tuning-accuracy $(CXXFILES) test/tuning_accuracy.cpp
 
 tuning-accuracy-no-feature: test/tuning_accuracy.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
 	mkdir -p output
 	mkdir -p output/plot
-	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -DNO_FEATURE -o exec/tuning-accuracy-no-feature $(CXXFILES) test/tuning_accuracy.cpp
+	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -DNO_FEATURE -DPART2 -o exec/tuning-accuracy-no-feature $(CXXFILES) test/tuning_accuracy.cpp
 
 tuning-accuracy-second: test/tuning_accuracy.cpp $(CXXFILES) $(HFILES)
 	mkdir -p exec
 	mkdir -p output
 	mkdir -p output/plot
-	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -DSECOND -o exec/tuning-accuracy-second $(CXXFILES) test/tuning_accuracy.cpp
-	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -DSECOND -DNO_FEATURE -o exec/tuning-accuracy-second-no-feature $(CXXFILES) test/tuning_accuracy.cpp
+	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -DSECOND -DPART2 -o exec/tuning-accuracy-second $(CXXFILES) test/tuning_accuracy.cpp
+	$(CXX) $(CXXFLAGS) -DDEBUG_CUDA -DNO_OUTPUT -DTUNE_ACCURACY -DSECOND -DNO_FEATURE -DPART2 -o exec/tuning-accuracy-second-no-feature $(CXXFILES) test/tuning_accuracy.cpp
 	
 clean:
 	rm exec/*

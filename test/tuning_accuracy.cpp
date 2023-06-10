@@ -45,23 +45,19 @@ int main(int argc, char **argv) {
   */
   std::vector<std::string> input_names = {"citeseer", "cora", "pubmed"};
 
-  //!#ifdef SECOND
+#ifdef SECOND
 #ifdef NO_FEATURE
   input_names = {"cora", "pubmed"};
 #else
   input_names = {"citeseer"};
 #endif
-  //!#endif
+#endif
 
-  std::vector<natural> n_layers_values = {2};           // 3
-  std::vector<real> dropout_values = {0.0};             // 16
-  std::vector<natural> hidden_dim_values = {8};         // 4
-  std::vector<natural> early_stopping_values = {10};    // 1
-  std::vector<real> weight_decay_values = {5e-5, 5e-4}; // 3
-  const natural total_rep = n_layers_values.size() * dropout_values.size() *
-                            dropout_values.size() * hidden_dim_values.size() *
-                            early_stopping_values.size() *
-                            weight_decay_values.size();
+  std::vector<natural> n_layers_values = {2, 3, 4};           // 3
+  std::vector<real> dropout_values = {0.0, 0.2, 0.4, 0.6};    // 16
+  std::vector<natural> hidden_dim_values = {8, 16, 32, 64};   // 4
+  std::vector<natural> early_stopping_values = {10};          // 1
+  std::vector<real> weight_decay_values = {5e-5, 5e-4, 5e-3}; // 3
 
   for (const auto &input_name : input_names) {
 #ifdef SECOND
@@ -79,12 +75,16 @@ int main(int argc, char **argv) {
       weight_decay_values = {5e-5, 5e-4, 5e-3, 5e-2};
     } else if (input_name == "pubmed") {
       n_layers_values = {2};
-      dropout_values = {0.0, 0.1};
-      hidden_dim_values = {40, 48, 56};
-      early_stopping_values = {20};
-      weight_decay_values = {1e-4, 1e-3};
+      dropout_values = {0.0, 0.1, 0.2, 0.4, 0.6};
+      hidden_dim_values = {40, 64, 80};
+      early_stopping_values = {10, 20};
+      weight_decay_values = {5e-4};
     }
 #endif
+    const natural total_rep = n_layers_values.size() * dropout_values.size() *
+                              dropout_values.size() * hidden_dim_values.size() *
+                              early_stopping_values.size() *
+                              weight_decay_values.size();
     GCNParams params;
     AdamParams adam_params;
     params.epochs = 1000;
@@ -183,7 +183,7 @@ int main(int argc, char **argv) {
                     " " + std::to_string(mean) + " " + std::to_string(max_acc) +
                     " " + std::to_string(var) + " " + std::to_string(seed);
                 file << to_write << std::endl;
-                printf("%.1f%%",
+                printf("%.1f%%\n",
                        static_cast<real>(rep_number) / total_rep * 100);
                 // std::cout << static_cast<real>(rep_number) / total_rep * 100
                 //<< "%" << std::endl;
