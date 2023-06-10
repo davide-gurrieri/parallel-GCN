@@ -17,7 +17,6 @@ using randState = curandStatePhilox4_32_10_t;
 namespace CudaParams
 {
   inline natural N_THREADS;
-  constexpr natural N_THREADS_DROPOUT = 32;
   inline natural N_BLOCKS; // 8 * 16 with 16 number of SM (multiProcessorCount)
   constexpr natural TILE_DIM = 16;
   inline natural SEED = 42;

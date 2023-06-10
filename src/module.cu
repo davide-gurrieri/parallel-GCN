@@ -141,11 +141,12 @@ __global__ void sparse_matmul_kernel_backward(const real *a, real *b, const real
     {
         const natural row = i / p;
         const natural col = i % p;
+        const real val = c[i];
 #pragma unroll
         for (natural jj = indptr[row]; jj < indptr[row + 1]; jj++)
         {
             natural j = indices[jj];
-            atomicAdd(&b[j * p + col], a[jj] * c[row * p + col]);
+            atomicAdd(&b[j * p + col], a[jj] * val);
         }
     }
 }

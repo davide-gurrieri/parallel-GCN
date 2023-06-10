@@ -158,24 +158,24 @@ real Parser::local_clustering_coefficient(natural node) {
         }
     }
   }
-  return static_cast<real>(triangles) / (edges * (edges - 1));
+  return 2 * static_cast<real>(triangles) / (edges * (edges - 1));
 }
 
 void Parser::calculateGraphValues() {
   auto &graph_idx = this->gcnData->graph;
   auto &graph_val = this->gcnData->graph_value;
 
-  graph_val.resize(graph_idx.indices.size(), 1.);
+  graph_val.resize(graph_idx.indices.size(), 0.);
   // iterate over the nodes
   natural temp = 0;
   for (int src = 0; src < graph_idx.indptr.size() - 1; src++) {
     for (int i = graph_idx.indptr[src]; i < graph_idx.indptr[src + 1]; i++) {
       int dst = graph_idx.indices[i];
-      if (src == dst)
-        graph_val[i] += 1; // graph_val[i] += local_clustering_coefficient[src];
-      graph_val[i] /=
-          sqrtf((graph_idx.indptr[src + 1] - graph_idx.indptr[src]) *
-                (graph_idx.indptr[dst + 1] - graph_idx.indptr[dst]));
+      // if (src == dst)
+      // std::cout << local_clustering_coefficient(src) << std::endl;
+      graph_val[i] =
+          1. / sqrtf((graph_idx.indptr[src + 1] - graph_idx.indptr[src]) *
+                     (graph_idx.indptr[dst + 1] - graph_idx.indptr[dst]));
     }
   }
 }
