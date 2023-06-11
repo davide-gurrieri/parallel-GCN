@@ -53,32 +53,32 @@ int main(int argc, char **argv) {
 #endif
 #endif
 
-  std::vector<natural> n_layers_values = {2, 3, 4};           // 3
-  std::vector<real> dropout_values = {0.0, 0.2, 0.4, 0.6};    // 16
-  std::vector<natural> hidden_dim_values = {8, 16, 32, 64};   // 4
-  std::vector<natural> early_stopping_values = {10};          // 1
-  std::vector<real> weight_decay_values = {5e-5, 5e-4, 5e-3}; // 3
+  std::vector<natural> n_layers_values = {2, 3, 4};
+  std::vector<real> dropout_values = {0.0, 0.2, 0.4, 0.6};
+  std::vector<natural> hidden_dim_values = {8, 16, 32, 64};
+  std::vector<natural> early_stopping_values = {10};
+  std::vector<real> weight_decay_values = {5e-5, 5e-4, 5e-3};
 
   for (const auto &input_name : input_names) {
 #ifdef SECOND
     if (input_name == "citeseer") {
       n_layers_values = {2};
       dropout_values = {0.2, 0.4, 0.6, 0.8};
-      hidden_dim_values = {8, 16, 32, 64};
+      hidden_dim_values = {12, 20, 40};
       early_stopping_values = {10};
-      weight_decay_values = {5e-4, 5e-3, 5e-2};
+      weight_decay_values = {5e-5, 5e-4};
     } else if (input_name == "cora") {
-      n_layers_values = {3};
-      dropout_values = {0.0, 0.2, 0.4, 0.6, 0.8};
-      hidden_dim_values = {48, 64, 80};
+      n_layers_values = {2};
+      dropout_values = {0.0, 0.2, 0.4};
+      hidden_dim_values = {56, 72, 80};
       early_stopping_values = {10};
-      weight_decay_values = {5e-5, 5e-4, 5e-3, 5e-2};
+      weight_decay_values = {5e-5, 5e-4};
     } else if (input_name == "pubmed") {
       n_layers_values = {2};
-      dropout_values = {0.0, 0.1, 0.2, 0.4, 0.6};
-      hidden_dim_values = {40, 64, 80};
-      early_stopping_values = {10, 20};
-      weight_decay_values = {5e-4};
+      dropout_values = {0.0, 0.2, 0.4};
+      hidden_dim_values = {4, 12, 20};
+      early_stopping_values = {10};
+      weight_decay_values = {5e-4, 5e-3};
     }
 #endif
     const natural total_rep = n_layers_values.size() * dropout_values.size() *
