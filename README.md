@@ -6,7 +6,7 @@ High-performance CUDA C++ implementation of Graph Convolutional Networks
 
 This repository is developed as part of the "High-Performance Data and Graph Analytics" contest at "Politecnico di Milano" university (see the [contest repository](https://github.com/ian-ofgod/hpdga-spring23)). It offers a CUDA implementation of a parallelized Graph Convolutional Network (GCN), which has been optimized to maximize classification accuracy on popular datasets.
 
-The parallelism enhances training and inference speed, resulting in a significant speedup compared to the sequential version. Moreover, classification accuracy is improved by adjusting the number of layers and optimizing the choice of hyperparameters through a validation dataset.
+The use of CUDA kernels on concurrent streams enhances training and inference speed, resulting in a substantial speedup up to 40. Moreover, the generalization of the number of layers, along with the selection of optimal hyperparameters using a validation dataset, has resulted in attaining satisfactory accuracy performance.
 
 ## Prerequisites
 
@@ -72,7 +72,7 @@ make performance-gpu
 
 The selected parameters are stored in the [parameters](https://github.com/davide-gurrieri/parallel-GCN/tree/main/parameters) folder.
 
-To run the version optimized for validation accuracy:
+To run the accuracy-optimized version:
 
 ```bash
 make gcn-par-improvement
