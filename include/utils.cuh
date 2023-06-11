@@ -19,7 +19,7 @@ namespace CudaParams
   inline natural N_THREADS;
   inline natural N_BLOCKS; // 8 * 16 with 16 number of SM (multiProcessorCount)
   constexpr natural TILE_DIM = 16;
-  inline natural SEED = 42;
+  inline natural SEED = 19990304;
 }
 
 #ifdef DEBUG_CUDA
