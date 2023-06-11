@@ -4,7 +4,7 @@
 n_layers = 2
 hidden_dims = 600
 dropouts = 0.0,0.1
-epochs = 5000
+epochs = 200
 early_stopping = 0
 
 #-------------------------------------------------
